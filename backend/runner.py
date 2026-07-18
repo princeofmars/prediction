@@ -4,97 +4,100 @@ import requests
 from openai import OpenAI
 import time
 
-API_BASE = "http://127.0.0.1:8000"
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", "dummy-key"))
+API_BASE = os.environ.get("API_BASE", "http://127.0.0.1:8000")
 
-def run_agent():
-    print("🤖 Waking up Prediction Agent Runner...")
+def run_agents():
+    print("🤖 Waking up Prediction Agent Orchestrator...")
     
-    # 1. Get Agents from Leaderboard
+    # 1. Fetch Agents and their secure API keys (in a real system, these would be managed by the agent runtime, not pulled from a public leaderboard)
+    # For this runner, we assume the environment passes a list of agent credentials
+    agent_creds = os.environ.get("AGENT_CREDENTIALS")
+    if not agent_creds:
+        print("⚠️ No AGENT_CREDENTIALS environment variable found. Format: '[{\"id\": 1, \"model\": \"gpt-4o-mini\", \"api_key\": \"...\"}]'")
+        return
+        
     try:
-        agents = requests.get(f"{API_BASE}/leaderboard").json()
-    except requests.exceptions.ConnectionError:
-        print("❌ Error: FastAPI server is not running. Start it with `uv run uvicorn main:app` first.")
+        active_agents = json.loads(agent_creds)
+    except Exception as e:
+        print("❌ Invalid AGENT_CREDENTIALS JSON format.")
         return
-
-    if not agents:
-        print("⚠️ No agents found. Please create one in the admin dashboard first (http://127.0.0.1:8000/admin).")
-        return
-    
-    # Use the first available agent
-    agent = agents[0]
-    print(f"👤 Active Agent: {agent['name']} (ID: {agent['id']}, Model: {agent['model']})")
 
     # 2. Get Open Markets
-    markets = requests.get(f"{API_BASE}/markets").json()
-    if not markets:
-        print("⚠️ No open markets found. Please sync markets in the admin dashboard.")
+    try:
+        markets = requests.get(f"{API_BASE}/markets", timeout=5).json()
+    except Exception as e:
+        print(f"❌ Failed to reach API: {e}")
         return
 
-    print(f"📊 Found {len(markets)} open markets. Analyzing...")
+    if not markets:
+        print("⚠️ No open markets found.")
+        return
 
-    for market in markets:
-        print(f"\n🧠 Market: {market['question']}")
+    # 3. Multi-Agent Orchestration
+    for agent in active_agents:
+        print(f"\n👤 Orchestrating Agent: {agent.get('model', 'unknown')}")
         
-        # Nexus-style Prompt combining numerical/probabilistic constraints and text reasoning
-        prompt = f"""
-        You are an elite, highly analytical prediction market AI.
-        Evaluate the following market question and predict the probability of it resolving to YES.
-        
-        Market Question: {market['question']}
-        Source: {market['source']}
-        
-        Respond strictly in valid JSON format with the following keys:
-        - "probability_yes": float between 0.0 and 1.0
-        - "confidence_score": float between 0.0 and 1.0
-        - "reasoning": concise string explaining your rationale based on current trends and probabilities.
-        """
+        for market in markets:
+            prompt = f"""
+            You are an elite, highly analytical prediction market AI.
+            Evaluate the following market question and predict the probability of it resolving to YES.
+            
+            Market Question: {market['question']}
+            Source: {market['source']}
+            
+            Respond strictly in valid JSON format:
+            - "probability_yes": float between 0.0 and 1.0
+            - "confidence_score": float between 0.0 and 1.0
+            - "reasoning": concise string explaining your rationale.
+            """
 
-        try:
-            if not os.environ.get("OPENAI_API_KEY"):
-                print("⚠️ OPENAI_API_KEY not set. Using LOCAL OLLAMA (Model: phi3).")
-                # Local Ollama Inference
-                ollama_payload = {
-                    "model": "phi3",
-                    "messages": [{"role": "user", "content": prompt}],
-                    "stream": False,
-                    "format": "json"
-                }
-                try:
-                    response = requests.post("http://127.0.0.1:11434/api/chat", json=ollama_payload)
+            model_name = agent.get('model', 'gpt-4o-mini')
+            
+            try:
+                if "gpt" in model_name or "claude" in model_name: # Handle APIs
+                    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", "dummy-key"))
+                    response = client.chat.completions.create(
+                        model=model_name,
+                        messages=[{"role": "user", "content": prompt}],
+                        response_format={"type": "json_object"},
+                        timeout=15
+                    )
+                    prediction_data = json.loads(response.choices[0].message.content)
+                else: # Fallback to local Ollama using dynamic model name
+                    ollama_payload = {
+                        "model": model_name,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "stream": False,
+                        "format": "json"
+                    }
+                    response = requests.post("http://127.0.0.1:11434/api/chat", json=ollama_payload, timeout=20)
                     response.raise_for_status()
                     prediction_data = json.loads(response.json()["message"]["content"])
-                except Exception as e:
-                    print(f"❌ Failed to connect to local Ollama. Is Ollama running? Error: {e}")
-                    continue
-            else:
-                # OpenAI Inference
-                response = client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[{"role": "user", "content": prompt}],
-                    response_format={"type": "json_object"}
-                )
-                prediction_data = json.loads(response.choices[0].message.content)
+                    
+            except Exception as e:
+                print(f"❌ Inference failed for market {market['id']} using {model_name}: {e}")
+                continue
 
-            # 3. Post the Prediction back to our platform
+            # 4. Post authenticated prediction
             payload = {
-                "agent_id": agent["id"],
                 "market_id": market["id"],
                 "probability_yes": prediction_data["probability_yes"],
                 "confidence_score": prediction_data["confidence_score"],
                 "reasoning": prediction_data["reasoning"]
             }
             
-            res = requests.post(f"{API_BASE}/predictions", json=payload)
-            res.raise_for_status()
+            headers = {"X-Agent-Key": agent.get("api_key")}
             
-            print(f"   ↳ 🎯 Prob: {prediction_data['probability_yes']*100}% | Conf: {prediction_data['confidence_score']}")
-            print(f"   ↳ 📝 Reasoning: {prediction_data['reasoning']}")
-            
-        except Exception as e:
-            print(f"❌ Error processing market {market['id']}: {e}")
-            
-        time.sleep(1) # Prevent rate-limiting
+            try:
+                res = requests.post(f"{API_BASE}/predictions", json=payload, headers=headers, timeout=5)
+                res.raise_for_status()
+                print(f"   ✅ [Market {market['id']}] Prob: {prediction_data['probability_yes']} | Reason: {prediction_data['reasoning'][:50]}...")
+            except requests.exceptions.HTTPError as e:
+                # 409 means already predicted, ignore silently. Other errors log.
+                if res.status_code != 409:
+                    print(f"❌ Failed to submit prediction: {res.text}")
+                    
+            time.sleep(1) # Rate limit protection
 
 if __name__ == "__main__":
-    run_agent()
+    run_agents()

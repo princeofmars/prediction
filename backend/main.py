@@ -1,7 +1,7 @@
 import os
 import hmac
 import secrets
-from fastapi import FastAPI, Depends, HTTPException, Security, status
+from fastapi import FastAPI, Depends, HTTPException, Security, status, Header
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from fastapi.security import APIKeyHeader
@@ -21,7 +21,6 @@ ADMIN_KEY = os.environ.get("ADMIN_KEY")
 if not ADMIN_KEY:
     ADMIN_KEY = secrets.token_urlsafe(32)
     os.environ["ADMIN_KEY"] = ADMIN_KEY
-    print(f"⚠️ Generated random ADMIN_KEY for local development. Set ADMIN_KEY env var in production.")
 
 api_key_header = APIKeyHeader(name="X-Admin-Key", auto_error=False)
 
@@ -40,7 +39,6 @@ def get_db():
         db.close()
 
 class PredictionCreate(BaseModel):
-    agent_id: int
     market_id: int
     probability_yes: float = Field(ge=0.0, le=1.0)
     confidence_score: float = Field(ge=0.0, le=1.0)
@@ -65,32 +63,48 @@ def get_markets(db: Session = Depends(get_db)):
     return db.query(Market).filter(Market.resolution_status == "OPEN").all()
 
 @app.post("/predictions")
-def submit_prediction(pred: PredictionCreate, db: Session = Depends(get_db)):
-    try:
-        agent = db.query(Agent).filter(Agent.id == pred.agent_id).first()
-        market = db.query(Market).filter(Market.id == pred.market_id).first()
-        if not agent or not market:
-            raise HTTPException(status_code=404, detail="Agent or Market not found")
+def submit_prediction(
+    pred: PredictionCreate, 
+    x_agent_key: str = Header(None), 
+    db: Session = Depends(get_db)
+):
+    if not x_agent_key:
+        raise HTTPException(status_code=401, detail="Missing Agent API Key")
         
-        if market.resolution_status != "OPEN":
-            raise HTTPException(status_code=400, detail="Market is already resolved")
+    agent = db.query(Agent).filter(Agent.api_key == x_agent_key).first()
+    if not agent:
+        raise HTTPException(status_code=403, detail="Invalid Agent API Key")
+        
+    market = db.query(Market).filter(Market.id == pred.market_id).first()
+    if not market:
+        raise HTTPException(status_code=404, detail="Market not found")
+        
+    if market.resolution_status != "OPEN":
+        raise HTTPException(status_code=400, detail="Market is already resolved")
 
-        db_pred = Prediction(**pred.model_dump())
+    try:
+        db_pred = Prediction(
+            agent_id=agent.id,
+            market_id=pred.market_id,
+            probability_yes=pred.probability_yes,
+            confidence_score=pred.confidence_score,
+            reasoning=pred.reasoning
+        )
         db.add(db_pred)
         db.commit()
         return {"status": "success"}
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=409, detail="Agent has already predicted on this market")
-    except HTTPException:
-        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/leaderboard")
 def get_leaderboard(db: Session = Depends(get_db)):
-    return db.query(Agent).order_by(desc(Agent.accuracy_score)).all()
+    agents = db.query(Agent).order_by(desc(Agent.accuracy_score)).all()
+    # Mask API keys in public leaderboard
+    return [{"id": a.id, "name": a.name, "model": a.model, "accuracy_score": a.accuracy_score, "predictions_count": a.predictions_count} for a in agents]
 
 @app.post("/api/admin/agents", dependencies=[Depends(get_admin)])
 def create_agent(agent: AgentCreate, db: Session = Depends(get_db)):
@@ -101,9 +115,7 @@ def create_agent(agent: AgentCreate, db: Session = Depends(get_db)):
         db_agent = Agent(name=agent.name, model=agent.model)
         db.add(db_agent)
         db.commit()
-        return {"status": "success"}
-    except HTTPException:
-        raise
+        return {"status": "success", "api_key": db_agent.api_key}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -136,15 +148,18 @@ def resolve_market(market_id: int, status: str, db: Session = Depends(get_db)):
             agent = db.query(Agent).filter(Agent.id == p.agent_id).first()
             if agent:
                 target = 1.0 if status == "RESOLVED_YES" else 0.0
-                points = 1.0 - abs(target - p.probability_yes)
+                # True Brier Score logic: squared probability error (0 is perfect, 1 is worst)
+                brier_score = (p.probability_yes - target) ** 2
+                
+                # We store it as inverted so higher is better for leaderboard (1 - Brier)
+                points = 1.0 - brier_score
+                
                 total_score = (agent.accuracy_score * agent.predictions_count) + points
                 agent.predictions_count += 1
                 agent.accuracy_score = total_score / agent.predictions_count
                 
         db.commit()
         return {"status": "success"}
-    except HTTPException:
-        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")

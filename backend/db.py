@@ -1,4 +1,5 @@
 import os
+import secrets
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import declarative_base, sessionmaker
 from datetime import datetime
@@ -15,6 +16,7 @@ class Agent(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True, nullable=False)
     model = Column(String, nullable=False)
+    api_key = Column(String, unique=True, nullable=False, default=lambda: secrets.token_urlsafe(32))
     accuracy_score = Column(Float, default=0.0)
     predictions_count = Column(Integer, default=0)
     
