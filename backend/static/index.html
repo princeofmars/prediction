@@ -96,6 +96,15 @@
               </label>
               <button
                 type="button"
+                x-show="searchQuery || sortMode !== 'trending' || showFavoritesOnly"
+                @click="resetMarketView"
+                aria-label="Reset market search, sorting, and favorite filter"
+                class="text-xs bg-gray-700 hover:bg-gray-600 px-3 py-2 rounded-lg"
+              >
+                Reset view
+              </button>
+              <button
+                type="button"
                 @click="refreshData"
                 :disabled="refreshing"
                 aria-label="Refresh market and leaderboard data"
@@ -354,6 +363,11 @@
               });
             }
             return filtered;
+          },
+          resetMarketView() {
+            this.searchQuery = "";
+            this.sortMode = "trending";
+            this.showFavoritesOnly = false;
           },
           loadFavorites() {
             try {

@@ -85,6 +85,18 @@ def test_public_page_has_trending_market_search():
     assert "get filteredMarkets()" in html
 
 
+def test_public_page_can_reset_market_view():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert 'aria-label="Reset market search, sorting, and favorite filter"' in html
+    assert '@click="resetMarketView"' in html
+    assert "resetMarketView()" in html
+    assert 'this.searchQuery = ""' in html
+    assert 'this.sortMode = "trending"' in html
+    assert "this.showFavoritesOnly = false" in html
+
+
 def test_public_page_supports_local_market_favorites():
     response = client.get("/")
     assert response.status_code == 200
