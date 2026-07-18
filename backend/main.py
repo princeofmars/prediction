@@ -8,9 +8,12 @@ from fastapi.security import APIKeyHeader
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import desc
-from db import SessionLocal, Agent, Market, Prediction
+from db import SessionLocal, Agent, Market, Prediction, Base, engine
 from pydantic import BaseModel, Field
 from sync_polymarket import sync_markets_logic
+from passlib.context import CryptContext
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -21,6 +24,10 @@ ADMIN_KEY = os.environ.get("ADMIN_KEY")
 if not ADMIN_KEY:
     ADMIN_KEY = secrets.token_urlsafe(32)
     os.environ["ADMIN_KEY"] = ADMIN_KEY
+    print("\n" + "="*60)
+    print(f"⚠️  GENERATED ADMIN_KEY: {ADMIN_KEY}")
+    print("   Save this key! You will need it for the Admin UI.")
+    print("="*60 + "\n")
 
 api_key_header = APIKeyHeader(name="X-Admin-Key", auto_error=False)
 
@@ -71,7 +78,14 @@ def submit_prediction(
     if not x_agent_key:
         raise HTTPException(status_code=401, detail="Missing Agent API Key")
         
-    agent = db.query(Agent).filter(Agent.api_key == x_agent_key).first()
+    # Verify hashed key
+    agents = db.query(Agent).all()
+    agent = None
+    for a in agents:
+        if pwd_context.verify(x_agent_key, a.hashed_api_key):
+            agent = a
+            break
+            
     if not agent:
         raise HTTPException(status_code=403, detail="Invalid Agent API Key")
         
@@ -96,6 +110,9 @@ def submit_prediction(
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=409, detail="Agent has already predicted on this market")
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -103,7 +120,6 @@ def submit_prediction(
 @app.get("/leaderboard")
 def get_leaderboard(db: Session = Depends(get_db)):
     agents = db.query(Agent).order_by(desc(Agent.accuracy_score)).all()
-    # Mask API keys in public leaderboard
     return [{"id": a.id, "name": a.name, "model": a.model, "accuracy_score": a.accuracy_score, "predictions_count": a.predictions_count} for a in agents]
 
 @app.post("/api/admin/agents", dependencies=[Depends(get_admin)])
@@ -112,10 +128,17 @@ def create_agent(agent: AgentCreate, db: Session = Depends(get_db)):
         exists = db.query(Agent).filter(Agent.name == agent.name).first()
         if exists:
             raise HTTPException(status_code=409, detail="Agent name already exists")
-        db_agent = Agent(name=agent.name, model=agent.model)
+            
+        raw_api_key = secrets.token_urlsafe(32)
+        hashed_key = pwd_context.hash(raw_api_key)
+        
+        db_agent = Agent(name=agent.name, model=agent.model, hashed_api_key=hashed_key)
         db.add(db_agent)
         db.commit()
-        return {"status": "success", "api_key": db_agent.api_key}
+        return {"status": "success", "api_key": raw_api_key}
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -148,18 +171,17 @@ def resolve_market(market_id: int, status: str, db: Session = Depends(get_db)):
             agent = db.query(Agent).filter(Agent.id == p.agent_id).first()
             if agent:
                 target = 1.0 if status == "RESOLVED_YES" else 0.0
-                # True Brier Score logic: squared probability error (0 is perfect, 1 is worst)
                 brier_score = (p.probability_yes - target) ** 2
-                
-                # We store it as inverted so higher is better for leaderboard (1 - Brier)
                 points = 1.0 - brier_score
-                
                 total_score = (agent.accuracy_score * agent.predictions_count) + points
                 agent.predictions_count += 1
                 agent.accuracy_score = total_score / agent.predictions_count
                 
         db.commit()
         return {"status": "success"}
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")

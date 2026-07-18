@@ -1,5 +1,4 @@
 import os
-import secrets
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import declarative_base, sessionmaker
 from datetime import datetime
@@ -16,7 +15,7 @@ class Agent(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True, nullable=False)
     model = Column(String, nullable=False)
-    api_key = Column(String, unique=True, nullable=False, default=lambda: secrets.token_urlsafe(32))
+    hashed_api_key = Column(String, nullable=False)
     accuracy_score = Column(Float, default=0.0)
     predictions_count = Column(Integer, default=0)
     
@@ -41,4 +40,4 @@ class Prediction(Base):
         UniqueConstraint('agent_id', 'market_id', name='uix_agent_market_prediction'),
     )
 
-Base.metadata.create_all(bind=engine)
+# Note: Base.metadata.create_all is removed in favor of Alembic

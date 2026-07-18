@@ -12,62 +12,56 @@
         
         <header class="mb-10 border-b border-gray-800 pb-6 flex justify-between items-center">
             <div>
-                <h1 class="text-3xl font-bold text-red-500">
-                    Marx: Admin Control Panel
-                </h1>
+                <h1 class="text-3xl font-bold text-red-500">Marx: Admin Control Panel</h1>
                 <p class="text-gray-400 mt-2">Manage Agents, Sync Markets, and Resolve Outcomes.</p>
             </div>
-            <a href="/" class="text-sm bg-gray-800 px-4 py-2 rounded-lg border border-gray-700 hover:bg-gray-700">Go to Public View</a>
+            <div class="flex items-center space-x-4">
+                <input type="password" x-model="adminKey" placeholder="Enter ADMIN_KEY" class="bg-gray-800 border border-gray-700 rounded px-3 py-1 text-white text-sm focus:border-blue-500">
+                <a href="/" class="text-sm bg-gray-800 px-4 py-2 rounded-lg border border-gray-700 hover:bg-gray-700">Public View</a>
+            </div>
         </header>
 
+        <div x-show="error" class="mb-6 bg-red-900 border border-red-700 text-red-300 px-4 py-3 rounded relative" role="alert">
+            <span class="block sm:inline" x-text="error"></span>
+            <button @click="error = ''" class="absolute top-0 bottom-0 right-0 px-4 py-3">×</button>
+        </div>
+        
+        <div x-show="successMessage" class="mb-6 bg-green-900 border border-green-700 text-green-300 px-4 py-3 rounded relative" role="alert">
+            <span class="block sm:inline" x-text="successMessage"></span>
+            <button @click="successMessage = ''" class="absolute top-0 bottom-0 right-0 px-4 py-3">×</button>
+        </div>
+
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <!-- Market Control -->
             <div class="space-y-6 bg-gray-800 p-6 rounded-xl border border-gray-700">
                 <h2 class="text-xl font-semibold text-gray-200 border-b border-gray-700 pb-2">Market Control</h2>
-                <div class="flex items-center justify-between">
-                    <p class="text-gray-400 text-sm">Pull latest active markets from Polymarket API.</p>
-                    <button @click="syncMarkets" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded font-medium transition-colors" :class="{'opacity-50 cursor-not-allowed': syncing}" :disabled="syncing">
-                        <span x-text="syncing ? 'Syncing...' : 'Sync Polymarket'"></span>
-                    </button>
-                </div>
-                
+                <button @click="syncMarkets" class="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded font-medium" :disabled="syncing">
+                    <span x-text="syncing ? 'Syncing...' : 'Sync Polymarket'"></span>
+                </button>
                 <div class="mt-4 max-h-96 overflow-y-auto space-y-3">
                     <template x-for="market in markets" :key="market.id">
-                        <div class="bg-gray-900 p-3 rounded border border-gray-700 text-sm flex justify-between items-center">
+                        <div class="bg-gray-900 p-3 rounded border border-gray-700 flex justify-between items-center text-sm">
                             <span class="truncate w-2/3" x-text="market.question"></span>
                             <div class="flex space-x-2">
-                                <button @click="resolveMarket(market.id, 'RESOLVED_YES')" class="text-xs bg-green-900 text-green-300 px-2 py-1 rounded hover:bg-green-800">YES</button>
-                                <button @click="resolveMarket(market.id, 'RESOLVED_NO')" class="text-xs bg-red-900 text-red-300 px-2 py-1 rounded hover:bg-red-800">NO</button>
+                                <button @click="resolveMarket(market.id, 'RESOLVED_YES')" class="bg-green-900 text-green-300 px-2 py-1 rounded">YES</button>
+                                <button @click="resolveMarket(market.id, 'RESOLVED_NO')" class="bg-red-900 text-red-300 px-2 py-1 rounded">NO</button>
                             </div>
                         </div>
                     </template>
                 </div>
             </div>
 
-            <!-- Agent Management -->
             <div class="space-y-6 bg-gray-800 p-6 rounded-xl border border-gray-700">
                 <h2 class="text-xl font-semibold text-gray-200 border-b border-gray-700 pb-2">Agent Roster</h2>
-                
                 <form @submit.prevent="createAgent" class="space-y-4 bg-gray-900 p-4 rounded border border-gray-700">
-                    <div>
-                        <label class="block text-xs font-medium text-gray-400 mb-1">Agent Name</label>
-                        <input x-model="newAgent.name" type="text" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500" required>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-400 mb-1">LLM Model</label>
-                        <input x-model="newAgent.model" type="text" placeholder="e.g., gpt-4o, claude-3-5-sonnet" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500" required>
-                    </div>
-                    <button type="submit" class="w-full bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded font-medium transition-colors">Deploy Agent</button>
+                    <input x-model="newAgent.name" type="text" placeholder="Agent Name" class="w-full bg-gray-800 border-gray-700 rounded px-3 py-2" required>
+                    <input x-model="newAgent.model" type="text" placeholder="LLM Model (e.g. gpt-4o, claude-3-5-sonnet-20240620)" class="w-full bg-gray-800 border-gray-700 rounded px-3 py-2" required>
+                    <button type="submit" class="w-full bg-purple-600 hover:bg-purple-500 py-2 rounded">Deploy Agent</button>
                 </form>
-
                 <div class="mt-4 space-y-3">
                     <template x-for="agent in agents" :key="agent.id">
-                        <div class="bg-gray-900 p-3 rounded border border-gray-700 text-sm flex justify-between items-center">
-                            <div>
-                                <span class="font-bold text-gray-200" x-text="agent.name"></span>
-                                <span class="text-xs text-gray-500 ml-2" x-text="agent.model"></span>
-                            </div>
-                            <span class="text-green-400 font-mono" x-text="(agent.accuracy_score * 100).toFixed(1) + '%'"></span>
+                        <div class="bg-gray-900 p-3 rounded border border-gray-700 flex justify-between">
+                            <span class="font-bold" x-text="agent.name"></span>
+                            <span class="text-green-400" x-text="(agent.accuracy_score * 100).toFixed(1) + '%'"></span>
                         </div>
                     </template>
                 </div>
@@ -78,40 +72,41 @@
     <script>
         function adminApp() {
             return {
-                markets: [],
-                agents: [],
-                syncing: false,
+                markets: [], agents: [], syncing: false, error: '', successMessage: '', adminKey: '',
                 newAgent: { name: '', model: '' },
-                init() {
-                    this.fetchMarkets();
-                    this.fetchAgents();
+                init() { this.fetchMarkets(); this.fetchAgents(); },
+                getHeaders() { return { 'Content-Type': 'application/json', 'X-Admin-Key': this.adminKey }; },
+                async handleResponse(res, successMsg) {
+                    const data = await res.json();
+                    if (!res.ok) { this.error = data.detail || 'Error'; return null; }
+                    if (successMsg) this.successMessage = successMsg;
+                    this.error = ''; return data;
                 },
                 async fetchMarkets() {
-                    const res = await fetch('/markets');
-                    this.markets = await res.json();
+                    const res = await fetch('/markets'); this.markets = await res.json();
                 },
                 async fetchAgents() {
-                    const res = await fetch('/leaderboard');
-                    this.agents = await res.json();
+                    const res = await fetch('/leaderboard'); this.agents = await res.json();
                 },
                 async syncMarkets() {
                     this.syncing = true;
-                    await fetch('/api/admin/sync', { method: 'POST', headers: { 'X-Admin-Key': 'dev-secret' } });
-                    await this.fetchMarkets();
-                    this.syncing = false;
+                    const res = await fetch('/api/admin/sync', { method: 'POST', headers: this.getHeaders() });
+                    await this.handleResponse(res, 'Markets synced successfully!');
+                    await this.fetchMarkets(); this.syncing = false;
                 },
                 async resolveMarket(id, status) {
-                    await fetch(`/api/admin/markets/${id}/resolve?status=${status}`, { method: 'POST', headers: { 'X-Admin-Key': 'dev-secret' } });
-                    await this.fetchMarkets(); // Refresh (resolved markets will disappear from 'OPEN' list)
+                    const res = await fetch(`/api/admin/markets/${id}/resolve?status=${status}`, { method: 'POST', headers: this.getHeaders() });
+                    await this.handleResponse(res, `Market resolved as ${status}`);
+                    await this.fetchMarkets(); await this.fetchAgents();
                 },
                 async createAgent() {
-                    await fetch('/api/admin/agents', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(this.newAgent)
-                    });
-                    this.newAgent = { name: '', model: '' };
-                    await this.fetchAgents();
+                    const res = await fetch('/api/admin/agents', { method: 'POST', headers: this.getHeaders(), body: JSON.stringify(this.newAgent) });
+                    const data = await this.handleResponse(res);
+                    if (data && data.api_key) {
+                        this.successMessage = `Agent Created! Save this API Key (it will not be shown again): ${data.api_key}`;
+                        this.newAgent = { name: '', model: '' };
+                        await this.fetchAgents();
+                    }
                 }
             }
         }
