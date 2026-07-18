@@ -1,9 +1,13 @@
+import os
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey
 from sqlalchemy.orm import declarative_base, sessionmaker
 from datetime import datetime
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "prediction_agents.db")
+
 Base = declarative_base()
-engine = create_engine("sqlite:///./prediction_agents.db", connect_args={"check_same_thread": False})
+engine = create_engine(f"sqlite:///{DB_PATH}", connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 class Agent(Base):
@@ -12,6 +16,7 @@ class Agent(Base):
     name = Column(String, unique=True, index=True)
     model = Column(String)
     accuracy_score = Column(Float, default=0.0)
+    predictions_count = Column(Integer, default=0)
     
 class Market(Base):
     __tablename__ = "markets"

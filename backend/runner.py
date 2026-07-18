@@ -51,17 +51,26 @@ def run_agent():
         """
 
         try:
-            # Check if API key is set; if not, use an automated mock response so testing doesn't crash
             if not os.environ.get("OPENAI_API_KEY"):
-                print("⚠️ OPENAI_API_KEY not set. Using local mock analysis engine.")
-                prediction_data = {
-                    "probability_yes": 0.55,
-                    "confidence_score": 0.70,
-                    "reasoning": f"Mock analysis: {market['question']} presents mixed technical indicators. Proceeding with caution."
+                print("⚠️ OPENAI_API_KEY not set. Using LOCAL OLLAMA (Model: phi3).")
+                # Local Ollama Inference
+                ollama_payload = {
+                    "model": "phi3",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "stream": False,
+                    "format": "json"
                 }
+                try:
+                    response = requests.post("http://127.0.0.1:11434/api/chat", json=ollama_payload)
+                    response.raise_for_status()
+                    prediction_data = json.loads(response.json()["message"]["content"])
+                except Exception as e:
+                    print(f"❌ Failed to connect to local Ollama. Is Ollama running? Error: {e}")
+                    continue
             else:
+                # OpenAI Inference
                 response = client.chat.completions.create(
-                    model="gpt-4o-mini",  # You can dynamically set this to agent['model'] if desired
+                    model="gpt-4o-mini",
                     messages=[{"role": "user", "content": prompt}],
                     response_format={"type": "json_object"}
                 )

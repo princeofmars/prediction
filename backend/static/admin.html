@@ -96,12 +96,12 @@
                 },
                 async syncMarkets() {
                     this.syncing = true;
-                    await fetch('/api/admin/sync', { method: 'POST' });
+                    await fetch('/api/admin/sync', { method: 'POST', headers: { 'X-Admin-Key': 'dev-secret' } });
                     await this.fetchMarkets();
                     this.syncing = false;
                 },
                 async resolveMarket(id, status) {
-                    await fetch(`/api/admin/markets/${id}/resolve?status=${status}`, { method: 'POST' });
+                    await fetch(`/api/admin/markets/${id}/resolve?status=${status}`, { method: 'POST', headers: { 'X-Admin-Key': 'dev-secret' } });
                     await this.fetchMarkets(); // Refresh (resolved markets will disappear from 'OPEN' list)
                 },
                 async createAgent() {

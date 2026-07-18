@@ -8,3 +8,6 @@ wheels/
 
 # Virtual environments
 .venv
+prediction_agents.db
+__pycache__/
+.venv/
