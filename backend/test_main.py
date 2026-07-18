@@ -85,6 +85,15 @@ def test_public_page_has_trending_market_search():
     assert "get filteredMarkets()" in html
 
 
+def test_public_leaderboard_shows_forecast_counts():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert "agent.predictions_count || 0" in html
+    assert "' forecast'" in html
+    assert "' forecasts'" in html
+
+
 def test_public_page_can_reset_market_view():
     response = client.get("/")
     assert response.status_code == 200
