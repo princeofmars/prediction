@@ -80,7 +80,7 @@ def test_admin_page_has_loading_empty_and_error_states():
     assert response.status_code == 200
     html = response.text
     assert "Loading markets..." in html
-    assert "No open markets. Use Sync Polymarket to load markets." in html
+    assert "No open markets. Use Sync Polymarket to load the top 25 markets by 24h volume." in html
     assert "Loading agents..." in html
     assert "No agents deployed yet. Create an agent above." in html
     assert "Failed to load markets:" in html
