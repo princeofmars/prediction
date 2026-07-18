@@ -69,6 +69,12 @@ def prediction_payload(market_id, probability=0.75):
     }
 
 
+def test_public_page_labels_trending_markets():
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "Trending Markets (24h volume)" in response.text
+
+
 def test_admin_page_has_loading_empty_and_error_states():
     response = client.get("/admin")
     assert response.status_code == 200
@@ -236,10 +242,16 @@ def test_market_sync_uses_supported_public_events_query(mock_get):
     response.json.return_value = []
     mock_get.return_value = response
 
-    assert sync_markets_logic() == {"added": 0, "updated": 0}
+    assert sync_markets_logic() == {"added": 0, "updated": 0, "hidden": 0}
     mock_get.assert_called_once_with(
-        "https://gamma-api.polymarket.com/events",
-        params={"limit": 25, "active": "true", "closed": "false"},
+        "https://gamma-api.polymarket.com/markets",
+        params={
+            "limit": 25,
+            "active": "true",
+            "closed": "false",
+            "order": "volume24hr",
+            "ascending": "false",
+        },
         headers={"Accept": "application/json"},
         timeout=10,
     )
