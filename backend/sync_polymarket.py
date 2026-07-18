@@ -93,8 +93,6 @@ def sync_markets_logic(db: Session = None):
                 "limit": 25,
                 "active": "true",
                 "closed": "false",
-                "order": "volume_24hr",
-                "ascending": "false",
             },
             headers={"Accept": "application/json"},
             timeout=10,

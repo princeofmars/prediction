@@ -3,7 +3,7 @@ import os
 import sqlite3
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import bcrypt
 import pytest
@@ -20,7 +20,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from db import Agent, Base, Market, SessionLocal, engine  # noqa: E402
 from main import ADMIN_KEY, app  # noqa: E402
 from runner import build_prompt, validate_forecast  # noqa: E402
-from sync_polymarket import _market_records  # noqa: E402
+from sync_polymarket import _market_records, sync_markets_logic  # noqa: E402
 
 
 client = TestClient(app)
@@ -228,6 +228,22 @@ def test_bcrypt_release_key_is_accepted_and_upgraded():
     with SessionLocal() as db:
         stored = db.query(Agent).one().hashed_api_key
         assert stored == hashlib.sha256(raw_key.encode()).hexdigest()
+
+
+@patch("sync_polymarket.requests.get")
+def test_market_sync_uses_supported_public_events_query(mock_get):
+    response = Mock()
+    response.json.return_value = []
+    mock_get.return_value = response
+
+    assert sync_markets_logic() == {"added": 0, "updated": 0}
+    mock_get.assert_called_once_with(
+        "https://gamma-api.polymarket.com/events",
+        params={"limit": 25, "active": "true", "closed": "false"},
+        headers={"Accept": "application/json"},
+        timeout=10,
+    )
+    response.raise_for_status.assert_called_once()
 
 
 def test_market_context_parsing_and_runner_prompt():
