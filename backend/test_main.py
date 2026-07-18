@@ -85,6 +85,17 @@ def test_public_page_has_trending_market_search():
     assert "get filteredMarkets()" in html
 
 
+def test_public_page_has_manual_data_refresh():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert 'aria-label="Refresh market and leaderboard data"' in html
+    assert '@click="refreshData"' in html
+    assert "refreshing ? 'Refreshing...' : 'Refresh data'" in html
+    assert "async refreshData()" in html
+    assert "this.lastUpdated = new Date().toLocaleTimeString" in html
+
+
 def test_admin_page_has_loading_empty_and_error_states():
     response = client.get("/admin")
     assert response.status_code == 200

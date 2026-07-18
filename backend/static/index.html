@@ -59,12 +59,26 @@
               placeholder="Search by question or description"
               class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
             />
-            <p class="text-xs text-gray-500" aria-live="polite">
-              <span x-text="filteredMarkets.length"></span>
-              of
-              <span x-text="markets.length"></span>
-              trending markets shown
-            </p>
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <p class="text-xs text-gray-500" aria-live="polite">
+                <span x-text="filteredMarkets.length"></span>
+                of
+                <span x-text="markets.length"></span>
+                trending markets shown
+                <span x-show="lastUpdated" class="ml-2">
+                  Updated <span x-text="lastUpdated"></span>
+                </span>
+              </p>
+              <button
+                type="button"
+                @click="refreshData"
+                :disabled="refreshing"
+                aria-label="Refresh market and leaderboard data"
+                class="text-xs bg-blue-700 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-wait px-3 py-2 rounded-lg"
+              >
+                <span x-text="refreshing ? 'Refreshing...' : 'Refresh data'"></span>
+              </button>
+            </div>
           </div>
 
           <div class="space-y-4">
@@ -223,6 +237,8 @@
           markets: [],
           leaderboard: [],
           searchQuery: "",
+          refreshing: false,
+          lastUpdated: "",
           get filteredMarkets() {
             const query = this.searchQuery.trim().toLowerCase();
             if (!query) return this.markets;
@@ -235,8 +251,25 @@
             );
           },
           init() {
-            this.fetchMarkets();
-            this.fetchLeaderboard();
+            this.refreshData();
+          },
+          async refreshData() {
+            if (this.refreshing) return;
+            this.refreshing = true;
+            try {
+              const [marketsOk, leaderboardOk] = await Promise.all([
+                this.fetchMarkets(),
+                this.fetchLeaderboard(),
+              ]);
+              if (marketsOk && leaderboardOk) {
+                this.lastUpdated = new Date().toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                });
+              }
+            } finally {
+              this.refreshing = false;
+            }
           },
           async fetchMarkets() {
             try {
@@ -255,16 +288,22 @@
                   return { ...market, predictions };
                 }),
               );
+              return true;
             } catch (e) {
               console.error("Failed to fetch markets", e);
+              return false;
             }
           },
           async fetchLeaderboard() {
             try {
               const res = await fetch("/leaderboard");
+              if (!res.ok)
+                throw new Error(`Leaderboard request failed: ${res.status}`);
               this.leaderboard = await res.json();
+              return true;
             } catch (e) {
               console.error("Failed to fetch leaderboard", e);
+              return false;
             }
           },
         };
