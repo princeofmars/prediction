@@ -1,34 +1,401 @@
-import pytest
-from fastapi.testclient import TestClient
+import hashlib
+import os
+import sqlite3
+import tempfile
+from pathlib import Path
 from unittest.mock import patch
-from main import app, ADMIN_KEY
+
+import bcrypt
+import pytest
+
+
+TEST_DB_FILE = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+TEST_DB_FILE.close()
+os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB_FILE.name}"
+os.environ["ADMIN_KEY"] = "test-admin-key"
+
+from alembic import command  # noqa: E402
+from alembic.config import Config  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+from db import Agent, Base, Market, SessionLocal, engine  # noqa: E402
+from main import ADMIN_KEY, app  # noqa: E402
+from runner import build_prompt, validate_forecast  # noqa: E402
+from sync_polymarket import _market_records  # noqa: E402
+
 
 client = TestClient(app)
+ADMIN_HEADERS = {"X-Admin-Key": ADMIN_KEY}
 
-def test_admin_auth_required():
-    response = client.post("/api/admin/sync")
-    assert response.status_code == 401
 
-def test_admin_auth_invalid():
+@pytest.fixture(autouse=True)
+def clean_database():
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    yield
+    Base.metadata.drop_all(bind=engine)
+
+
+def create_agent(name="Test Agent", model="gpt-4o-mini"):
+    response = client.post(
+        "/api/admin/agents",
+        headers=ADMIN_HEADERS,
+        json={"name": name, "model": model},
+    )
+    assert response.status_code == 200
+    return response.json()["api_key"]
+
+
+def create_market(question="Will the test pass?"):
+    with SessionLocal() as db:
+        market = Market(
+            source_market_id=f"test-{question}",
+            source="Test",
+            question=question,
+            description="A deterministic test market",
+            resolution_status="OPEN",
+        )
+        db.add(market)
+        db.commit()
+        db.refresh(market)
+        return market.id
+
+
+def prediction_payload(market_id, probability=0.75):
+    return {
+        "market_id": market_id,
+        "probability_yes": probability,
+        "confidence_score": 0.9,
+        "reasoning": "The test evidence supports this forecast.",
+    }
+
+
+def test_admin_auth_required_and_invalid():
+    assert client.post("/api/admin/sync").status_code == 401
     response = client.post("/api/admin/sync", headers={"X-Admin-Key": "wrong"})
     assert response.status_code == 403
 
-@patch('main.sync_markets_logic')
-def test_admin_auth_valid_mocked(mock_sync):
-    # Mock network call to isolate auth test
-    mock_sync.return_value = 5 
-    response = client.post("/api/admin/sync", headers={"X-Admin-Key": ADMIN_KEY})
-    assert response.status_code == 200
-    assert response.json()["added"] == 5
 
-def test_agent_prediction_unauthorized():
-    # Attempt to post a prediction without an X-Agent-Key header
-    payload = {
-        "market_id": 1,
-        "probability_yes": 0.5,
-        "confidence_score": 0.9,
-        "reasoning": "Test reasoning"
+@patch("main.sync_markets_logic")
+def test_admin_auth_valid_mocked(mock_sync):
+    mock_sync.return_value = {"added": 5, "updated": 2}
+    response = client.post("/api/admin/sync", headers=ADMIN_HEADERS)
+    assert response.status_code == 200
+    assert response.json() == {"status": "success", "added": 5, "updated": 2}
+
+
+def test_agent_creation_hashes_key_and_duplicate_is_conflict():
+    raw_key = create_agent()
+    with SessionLocal() as db:
+        agent = db.query(Agent).one()
+        assert agent.hashed_api_key != raw_key
+        assert agent.hashed_api_key == hashlib.sha256(raw_key.encode()).hexdigest()
+
+    leaderboard = client.get("/leaderboard").json()
+    assert "hashed_api_key" not in leaderboard[0]
+
+    duplicate = client.post(
+        "/api/admin/agents",
+        headers=ADMIN_HEADERS,
+        json={"name": "Test Agent", "model": "gpt-4o-mini"},
+    )
+    assert duplicate.status_code == 409
+
+
+def test_prediction_auth_validation_and_duplicate_protection():
+    market_id = create_market()
+    raw_key = create_agent()
+    payload = prediction_payload(market_id)
+
+    assert client.post("/predictions", json=payload).status_code == 401
+    assert (
+        client.post(
+            "/predictions", json=payload, headers={"X-Agent-Key": "wrong"}
+        ).status_code
+        == 403
+    )
+
+    invalid = {**payload, "probability_yes": 1.1}
+    assert (
+        client.post(
+            "/predictions", json=invalid, headers={"X-Agent-Key": raw_key}
+        ).status_code
+        == 422
+    )
+
+    created = client.post(
+        "/predictions", json=payload, headers={"X-Agent-Key": raw_key}
+    )
+    assert created.status_code == 200
+    duplicate = client.post(
+        "/predictions", json=payload, headers={"X-Agent-Key": raw_key}
+    )
+    assert duplicate.status_code == 409
+
+
+def test_public_predictions_and_brier_scoring():
+    market_id = create_market()
+    raw_key = create_agent()
+    response = client.post(
+        "/predictions",
+        json=prediction_payload(market_id, probability=0.75),
+        headers={"X-Agent-Key": raw_key},
+    )
+    assert response.status_code == 200
+
+    public_predictions = client.get(f"/markets/{market_id}/predictions")
+    assert public_predictions.status_code == 200
+    assert public_predictions.json()[0]["agent_name"] == "Test Agent"
+    assert public_predictions.json()[0]["probability_yes"] == 0.75
+
+    resolved = client.post(
+        f"/api/admin/markets/{market_id}/resolve?status=RESOLVED_YES",
+        headers=ADMIN_HEADERS,
+    )
+    assert resolved.status_code == 200
+    agent = client.get("/leaderboard").json()[0]
+    assert agent["predictions_count"] == 1
+    assert agent["accuracy_score"] == pytest.approx(0.9375)
+
+    repeated = client.post(
+        f"/api/admin/markets/{market_id}/resolve?status=RESOLVED_YES",
+        headers=ADMIN_HEADERS,
+    )
+    assert repeated.status_code == 400
+
+
+def test_key_rotation_revokes_old_key():
+    old_key = create_agent()
+    first_market = create_market("First market?")
+    second_market = create_market("Second market?")
+
+    rotated = client.post("/api/admin/agents/1/rotate-key", headers=ADMIN_HEADERS)
+    assert rotated.status_code == 200
+    new_key = rotated.json()["api_key"]
+    assert new_key != old_key
+
+    old_response = client.post(
+        "/predictions",
+        json=prediction_payload(first_market),
+        headers={"X-Agent-Key": old_key},
+    )
+    assert old_response.status_code == 403
+    new_response = client.post(
+        "/predictions",
+        json=prediction_payload(second_market),
+        headers={"X-Agent-Key": new_key},
+    )
+    assert new_response.status_code == 200
+
+
+def test_bcrypt_release_key_is_accepted_and_upgraded():
+    raw_key = "bcrypt-release-key"
+    with SessionLocal() as db:
+        agent = Agent(
+            name="Legacy bcrypt agent",
+            model="gpt-4o-mini",
+            hashed_api_key=bcrypt.hashpw(raw_key.encode(), bcrypt.gensalt()).decode(),
+        )
+        market = Market(
+            source_market_id="bcrypt-test-market",
+            source="Test",
+            question="Will legacy authentication work?",
+            resolution_status="OPEN",
+        )
+        db.add_all([agent, market])
+        db.commit()
+        db.refresh(market)
+        market_id = market.id
+
+    response = client.post(
+        "/predictions",
+        json=prediction_payload(market_id),
+        headers={"X-Agent-Key": raw_key},
+    )
+    assert response.status_code == 200
+    with SessionLocal() as db:
+        stored = db.query(Agent).one().hashed_api_key
+        assert stored == hashlib.sha256(raw_key.encode()).hexdigest()
+
+
+def test_market_context_parsing_and_runner_prompt():
+    records = list(
+        _market_records(
+            [
+                {
+                    "id": "event-1",
+                    "title": "Example event",
+                    "slug": "example-event",
+                    "markets": [
+                        {
+                            "id": "market-1",
+                            "question": "Will this happen?",
+                            "description": "Detailed context",
+                            "resolutionSource": "Official source",
+                            "endDate": "2026-08-01T00:00:00Z",
+                            "outcomes": '["Yes", "No"]',
+                            "outcomePrices": '["0.63", "0.37"]',
+                        }
+                    ],
+                }
+            ]
+        )
+    )
+    assert len(records) == 1
+    assert records[0]["market_probability"] == 0.63
+    assert records[0]["source_url"].endswith("example-event")
+
+    prompt = build_prompt({"id": 1, **records[0]})
+    assert "Detailed context" in prompt
+    assert "0.63" in prompt
+    assert "Official source" in prompt
+    assert (
+        validate_forecast(
+            {
+                "probability_yes": 0.6,
+                "confidence_score": 0.7,
+                "reasoning": "Enough supporting detail.",
+            }
+        )["probability_yes"]
+        == 0.6
+    )
+
+
+def alembic_config(database_url):
+    config = Config(str(Path(__file__).with_name("alembic.ini")))
+    config.set_main_option("sqlalchemy.url", database_url)
+    os.environ["DATABASE_URL"] = database_url
+    return config
+
+
+def test_alembic_clean_install(tmp_path):
+    database = tmp_path / "clean.db"
+    database_url = f"sqlite:///{database}"
+    command.upgrade(alembic_config(database_url), "head")
+    connection = sqlite3.connect(database)
+    tables = {
+        row[0]
+        for row in connection.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'"
+        ).fetchall()
     }
-    response = client.post("/predictions", json=payload)
-    assert response.status_code == 401
-    assert "Missing Agent API Key" in response.json()["detail"]
+    connection.close()
+    assert {"agents", "markets", "predictions", "alembic_version"} <= set(tables)
+
+
+def test_alembic_adopts_legacy_database_and_preserves_key(tmp_path):
+    database = tmp_path / "legacy.db"
+    raw_key = "legacy-agent-key"
+    connection = sqlite3.connect(database)
+    connection.executescript(
+        """
+        CREATE TABLE agents (
+            id INTEGER PRIMARY KEY,
+            name VARCHAR NOT NULL UNIQUE,
+            model VARCHAR NOT NULL,
+            api_key VARCHAR NOT NULL UNIQUE,
+            accuracy_score FLOAT,
+            predictions_count INTEGER
+        );
+        CREATE TABLE markets (
+            id INTEGER PRIMARY KEY,
+            source VARCHAR NOT NULL,
+            question VARCHAR NOT NULL,
+            resolution_status VARCHAR
+        );
+        CREATE TABLE predictions (
+            id INTEGER PRIMARY KEY,
+            agent_id INTEGER NOT NULL REFERENCES agents(id),
+            market_id INTEGER NOT NULL REFERENCES markets(id),
+            probability_yes FLOAT NOT NULL,
+            confidence_score FLOAT NOT NULL,
+            reasoning VARCHAR NOT NULL,
+            created_at DATETIME,
+            CONSTRAINT uix_agent_market_prediction UNIQUE (agent_id, market_id)
+        );
+        """
+    )
+    connection.execute(
+        "INSERT INTO agents VALUES (1, 'Legacy', 'gpt-4o-mini', ?, 0, 0)",
+        (raw_key,),
+    )
+    connection.commit()
+    connection.close()
+
+    database_url = f"sqlite:///{database}"
+    command.upgrade(alembic_config(database_url), "head")
+
+    connection = sqlite3.connect(database)
+    columns = {
+        row[1] for row in connection.execute("PRAGMA table_info(agents)").fetchall()
+    }
+    stored_hash = connection.execute(
+        "SELECT hashed_api_key FROM agents WHERE id = 1"
+    ).fetchone()[0]
+    connection.close()
+
+    assert "api_key" not in columns
+    assert "hashed_api_key" in columns
+    assert stored_hash == hashlib.sha256(raw_key.encode()).hexdigest()
+
+
+def test_alembic_upgrades_applied_bcrypt_release(tmp_path):
+    database = tmp_path / "bcrypt-release.db"
+    bcrypt_hash = bcrypt.hashpw(b"old-key", bcrypt.gensalt()).decode()
+    connection = sqlite3.connect(database)
+    connection.executescript(
+        """
+        CREATE TABLE alembic_version (
+            version_num VARCHAR(32) NOT NULL PRIMARY KEY
+        );
+        INSERT INTO alembic_version VALUES ('37f5d9b726fe');
+        CREATE TABLE agents (
+            id INTEGER PRIMARY KEY,
+            name VARCHAR NOT NULL UNIQUE,
+            model VARCHAR NOT NULL,
+            hashed_api_key VARCHAR NOT NULL,
+            accuracy_score FLOAT,
+            predictions_count INTEGER
+        );
+        CREATE TABLE markets (
+            id INTEGER PRIMARY KEY,
+            source VARCHAR NOT NULL,
+            question VARCHAR NOT NULL,
+            resolution_status VARCHAR
+        );
+        CREATE TABLE predictions (
+            id INTEGER PRIMARY KEY,
+            agent_id INTEGER NOT NULL REFERENCES agents(id),
+            market_id INTEGER NOT NULL REFERENCES markets(id),
+            probability_yes FLOAT NOT NULL,
+            confidence_score FLOAT NOT NULL,
+            reasoning VARCHAR NOT NULL,
+            created_at DATETIME,
+            CONSTRAINT uix_agent_market_prediction UNIQUE (agent_id, market_id)
+        );
+        """
+    )
+    connection.execute(
+        "INSERT INTO agents VALUES (1, 'Bcrypt', 'gpt-4o-mini', ?, 0, 0)",
+        (bcrypt_hash,),
+    )
+    connection.commit()
+    connection.close()
+
+    database_url = f"sqlite:///{database}"
+    command.upgrade(alembic_config(database_url), "head")
+
+    connection = sqlite3.connect(database)
+    market_columns = {
+        row[1] for row in connection.execute("PRAGMA table_info(markets)").fetchall()
+    }
+    preserved_hash = connection.execute(
+        "SELECT hashed_api_key FROM agents WHERE id = 1"
+    ).fetchone()[0]
+    version = connection.execute("SELECT version_num FROM alembic_version").fetchone()[
+        0
+    ]
+    connection.close()
+
+    assert {"source_market_id", "description", "market_probability"} <= market_columns
+    assert preserved_hash == bcrypt_hash
+    assert version == "8c63c4e1a4f2"

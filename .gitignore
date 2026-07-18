@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+
+# Local databases and secrets
+*.db
+*.db-journal
+.env
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/

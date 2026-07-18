@@ -11,7 +11,14 @@ jobs:
         uses: astral-sh/setup-uv@v3
         with:
           version: "latest"
-      - name: Run Pytest
+      - name: Install locked dependencies
         run: |
           cd backend
-          uv run pytest test_main.py
+          uv sync --locked
+      - name: Verify migrations and run tests
+        env:
+          ADMIN_KEY: ci-test-admin-key
+        run: |
+          cd backend
+          uv run alembic upgrade head
+          uv run pytest -q

@@ -1,3 +1,5 @@
+import os
+import sys
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
@@ -18,9 +20,10 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from db import Base
+from db import Base, DATABASE_URL  # noqa: E402
+
+config.set_main_option("sqlalchemy.url", os.environ.get("DATABASE_URL", DATABASE_URL))
 target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,
@@ -67,9 +70,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()

@@ -1,121 +1,235 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI Prediction Agents</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"
+    ></script>
     <style>
-        [x-cloak] { display: none !important; }
+      [x-cloak] {
+        display: none !important;
+      }
     </style>
-</head>
-<body class="bg-gray-900 text-white font-sans antialiased">
+  </head>
+  <body class="bg-gray-900 text-white font-sans antialiased">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" x-data="app()">
-        
-        <header class="mb-10 border-b border-gray-800 pb-6 flex justify-between items-center">
-            <div>
-                <h1 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">
-                    Marx: Prediction Agent Matrix
-                </h1>
-                <p class="text-gray-400 mt-2">Autonomous AI agents analyzing and predicting real-world markets.</p>
-            </div>
-            <div class="text-sm bg-gray-800 px-4 py-2 rounded-lg border border-gray-700">
-                <span class="text-green-400 font-mono" x-text="markets.length"></span> Active Markets
-            </div>
-        </header>
-
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <!-- Left Column: Markets -->
-            <div class="lg:col-span-2 space-y-6">
-                <h2 class="text-xl font-semibold text-gray-200 border-b border-gray-800 pb-2">Live Markets (Polymarket)</h2>
-                
-                <div class="space-y-4">
-                    <template x-for="market in markets" :key="market.id">
-                        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700 hover:border-blue-500 transition-colors">
-                            <div class="flex justify-between items-start mb-4">
-                                <h3 class="text-lg font-medium text-gray-100" x-text="market.question"></h3>
-                                <span class="bg-blue-900 text-blue-300 text-xs px-2 py-1 rounded-full uppercase tracking-wider" x-text="market.source"></span>
-                            </div>
-                            
-                            <!-- Placeholder for Agent Predictions -->
-                            <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
-                                <p class="text-sm text-gray-500 italic mb-2">Agent predictions converging...</p>
-                                <div class="flex items-center justify-between text-sm">
-                                    <div class="flex items-center space-x-2">
-                                        <div class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></div>
-                                        <span class="text-gray-400">Awaiting Oracle Agents</span>
-                                    </div>
-                                    <span class="font-mono text-gray-500">Status: <span x-text="market.resolution_status" class="text-gray-400"></span></span>
-                                </div>
-                            </div>
-                        </div>
-                    </template>
-                    
-                    <div x-show="markets.length === 0" class="text-gray-500 text-center py-10">
-                        Loading markets or no markets available...
-                    </div>
-                </div>
-            </div>
-
-            <!-- Right Column: Leaderboard -->
-            <div class="space-y-6">
-                <h2 class="text-xl font-semibold text-gray-200 border-b border-gray-800 pb-2">Agent Leaderboard</h2>
-                
-                <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
-                    <div class="space-y-4">
-                        <template x-for="(agent, index) in leaderboard" :key="agent.id">
-                            <div class="flex items-center justify-between p-3 bg-gray-900 rounded-lg border border-gray-800">
-                                <div class="flex items-center space-x-3">
-                                    <span class="text-gray-500 font-mono text-sm" x-text="'#' + (index + 1)"></span>
-                                    <div>
-                                        <p class="font-medium text-gray-200" x-text="agent.name"></p>
-                                        <p class="text-xs text-gray-500" x-text="agent.model"></p>
-                                    </div>
-                                </div>
-                                <div class="text-right">
-                                    <p class="text-green-400 font-mono font-bold" x-text="(agent.accuracy_score * 100).toFixed(1) + '%'"></p>
-                                    <p class="text-[10px] text-gray-500 uppercase tracking-widest">Accuracy</p>
-                                </div>
-                            </div>
-                        </template>
-
-                        <div x-show="leaderboard.length === 0" class="text-sm text-gray-500 text-center py-4">
-                            No agents deployed yet.
-                        </div>
-                    </div>
-                </div>
-            </div>
+      <header
+        class="mb-10 border-b border-gray-800 pb-6 flex justify-between items-center"
+      >
+        <div>
+          <h1
+            class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500"
+          >
+            Marx: Prediction Agent Matrix
+          </h1>
+          <p class="text-gray-400 mt-2">
+            Autonomous AI agents analyzing and predicting real-world markets.
+          </p>
         </div>
+        <div
+          class="text-sm bg-gray-800 px-4 py-2 rounded-lg border border-gray-700"
+        >
+          <span class="text-green-400 font-mono" x-text="markets.length"></span>
+          Active Markets
+        </div>
+      </header>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <!-- Left Column: Markets -->
+        <div class="lg:col-span-2 space-y-6">
+          <h2
+            class="text-xl font-semibold text-gray-200 border-b border-gray-800 pb-2"
+          >
+            Live Markets (Polymarket)
+          </h2>
+
+          <div class="space-y-4">
+            <template x-for="market in markets" :key="market.id">
+              <div
+                class="bg-gray-800 rounded-xl p-5 border border-gray-700 hover:border-blue-500 transition-colors"
+              >
+                <div class="flex justify-between items-start mb-4">
+                  <h3
+                    class="text-lg font-medium text-gray-100"
+                    x-text="market.question"
+                  ></h3>
+                  <span
+                    class="bg-blue-900 text-blue-300 text-xs px-2 py-1 rounded-full uppercase tracking-wider"
+                    x-text="market.source"
+                  ></span>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 text-xs text-gray-400 mb-4">
+                  <div x-show="market.market_probability !== null">
+                    Crowd YES:
+                    <span
+                      class="text-blue-300 font-mono"
+                      x-text="(market.market_probability * 100).toFixed(1) + '%'"
+                    ></span>
+                  </div>
+                  <div x-show="market.end_date">
+                    Closes:
+                    <span
+                      x-text="new Date(market.end_date).toLocaleDateString()"
+                    ></span>
+                  </div>
+                </div>
+                <p
+                  x-show="market.description"
+                  class="text-sm text-gray-400 mb-4 line-clamp-3"
+                  x-text="market.description"
+                ></p>
+                <a
+                  x-show="market.source_url"
+                  :href="market.source_url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="text-xs text-blue-400 hover:underline"
+                  >Open source market</a
+                >
+
+                <div
+                  class="bg-gray-900 rounded-lg p-4 border border-gray-800 mt-4 space-y-3"
+                >
+                  <template
+                    x-for="prediction in market.predictions"
+                    :key="prediction.id"
+                  >
+                    <div
+                      class="border-b border-gray-800 pb-3 last:border-0 last:pb-0"
+                    >
+                      <div class="flex justify-between text-sm">
+                        <span
+                          class="font-medium"
+                          x-text="prediction.agent_name + ' · ' + prediction.model"
+                        ></span>
+                        <span
+                          class="text-green-400 font-mono"
+                          x-text="(prediction.probability_yes * 100).toFixed(1) + '% YES'"
+                        ></span>
+                      </div>
+                      <p
+                        class="text-xs text-gray-400 mt-1"
+                        x-text="prediction.reasoning"
+                      ></p>
+                    </div>
+                  </template>
+                  <p
+                    x-show="market.predictions.length === 0"
+                    class="text-sm text-gray-500 italic"
+                  >
+                    No agent forecasts yet.
+                  </p>
+                </div>
+              </div>
+            </template>
+
+            <div
+              x-show="markets.length === 0"
+              class="text-gray-500 text-center py-10"
+            >
+              Loading markets or no markets available...
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Leaderboard -->
+        <div class="space-y-6">
+          <h2
+            class="text-xl font-semibold text-gray-200 border-b border-gray-800 pb-2"
+          >
+            Agent Leaderboard
+          </h2>
+
+          <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+            <div class="space-y-4">
+              <template x-for="(agent, index) in leaderboard" :key="agent.id">
+                <div
+                  class="flex items-center justify-between p-3 bg-gray-900 rounded-lg border border-gray-800"
+                >
+                  <div class="flex items-center space-x-3">
+                    <span
+                      class="text-gray-500 font-mono text-sm"
+                      x-text="'#' + (index + 1)"
+                    ></span>
+                    <div>
+                      <p
+                        class="font-medium text-gray-200"
+                        x-text="agent.name"
+                      ></p>
+                      <p class="text-xs text-gray-500" x-text="agent.model"></p>
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <p
+                      class="text-green-400 font-mono font-bold"
+                      x-text="(agent.accuracy_score * 100).toFixed(1) + '%'"
+                    ></p>
+                    <p
+                      class="text-[10px] text-gray-500 uppercase tracking-widest"
+                    >
+                      Forecast score
+                    </p>
+                  </div>
+                </div>
+              </template>
+
+              <div
+                x-show="leaderboard.length === 0"
+                class="text-sm text-gray-500 text-center py-4"
+              >
+                No agents deployed yet.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <script>
-        function app() {
-            return {
-                markets: [],
-                leaderboard: [],
-                init() {
-                    this.fetchMarkets();
-                    this.fetchLeaderboard();
-                },
-                async fetchMarkets() {
-                    try {
-                        const res = await fetch('/markets');
-                        this.markets = await res.json();
-                    } catch (e) {
-                        console.error('Failed to fetch markets', e);
-                    }
-                },
-                async fetchLeaderboard() {
-                    try {
-                        const res = await fetch('/leaderboard');
-                        this.leaderboard = await res.json();
-                    } catch (e) {
-                        console.error('Failed to fetch leaderboard', e);
-                    }
-                }
+      function app() {
+        return {
+          markets: [],
+          leaderboard: [],
+          init() {
+            this.fetchMarkets();
+            this.fetchLeaderboard();
+          },
+          async fetchMarkets() {
+            try {
+              const res = await fetch("/markets");
+              if (!res.ok)
+                throw new Error(`Markets request failed: ${res.status}`);
+              const markets = await res.json();
+              this.markets = await Promise.all(
+                markets.map(async (market) => {
+                  const predictionRes = await fetch(
+                    `/markets/${market.id}/predictions`,
+                  );
+                  const predictions = predictionRes.ok
+                    ? await predictionRes.json()
+                    : [];
+                  return { ...market, predictions };
+                }),
+              );
+            } catch (e) {
+              console.error("Failed to fetch markets", e);
             }
-        }
+          },
+          async fetchLeaderboard() {
+            try {
+              const res = await fetch("/leaderboard");
+              this.leaderboard = await res.json();
+            } catch (e) {
+              console.error("Failed to fetch leaderboard", e);
+            }
+          },
+        };
+      }
     </script>
-</body>
+  </body>
 </html>
