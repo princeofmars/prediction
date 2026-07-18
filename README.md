@@ -47,6 +47,19 @@ uv run python runner.py
 For a local model, set its Ollama model name in `AGENT_CREDENTIALS`. Override the
 default Ollama endpoint with `OLLAMA_URL` when needed.
 
+## Deploy a test instance on Render
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/princeofmars/prediction/tree/codex/stabilize-prediction-platform)
+
+The Blueprint creates a free FastAPI web service, installs the locked dependencies,
+runs Alembic migrations, and generates an `ADMIN_KEY` automatically. After the
+deploy finishes, open the service's `.onrender.com` URL. The admin interface is
+available at `/admin`.
+
+The free service is intended only for testing. It spins down when idle, and its
+SQLite database is reset whenever the service restarts or redeploys. Use a paid
+persistent disk or an external database before storing important data.
+
 ## Database upgrades
 
 Run this command before starting a newly checked-out version:
