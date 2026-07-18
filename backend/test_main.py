@@ -85,6 +85,17 @@ def test_public_page_has_trending_market_search():
     assert "get filteredMarkets()" in html
 
 
+def test_public_page_shows_market_time_remaining():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert "formatTimeRemaining(market.end_date)" in html
+    assert "formatTimeRemaining(endDate)" in html
+    assert 'return "closing"' in html
+    assert "h left" in html
+    assert "d left" in html
+
+
 def test_public_page_has_accessible_probability_meter():
     response = client.get("/")
     assert response.status_code == 200

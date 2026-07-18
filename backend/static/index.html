@@ -122,6 +122,10 @@
                     <span
                       x-text="new Date(market.end_date).toLocaleDateString()"
                     ></span>
+                    <span
+                      class="text-amber-300 font-medium"
+                      x-text="' · ' + formatTimeRemaining(market.end_date)"
+                    ></span>
                   </div>
                 </div>
                 <div
@@ -318,6 +322,17 @@
               });
             }
             return filtered;
+          },
+          formatTimeRemaining(endDate) {
+            if (!endDate) return "";
+            const endTime = new Date(endDate).getTime();
+            if (!Number.isFinite(endTime)) return "";
+            const hours = Math.ceil(
+              (endTime - Date.now()) / (60 * 60 * 1000),
+            );
+            if (hours <= 0) return "closing";
+            if (hours < 24) return `${hours}h left`;
+            return `${Math.ceil(hours / 24)}d left`;
           },
           init() {
             this.refreshData();
