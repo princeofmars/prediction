@@ -6,6 +6,8 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.139.2",
+    "httpx>=0.28.1",
+    "openai>=2.46.0",
     "pydantic>=2.13.4",
     "requests>=2.34.2",
     "sqlalchemy>=2.0.51",
