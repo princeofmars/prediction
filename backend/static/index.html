@@ -47,8 +47,28 @@
             Trending Markets (24h volume)
           </h2>
 
+          <div class="bg-gray-800 rounded-xl p-4 border border-gray-700 space-y-2">
+            <label for="market-search" class="text-sm font-medium text-gray-200">
+              Search trending markets
+            </label>
+            <input
+              id="market-search"
+              type="search"
+              x-model.debounce.200ms="searchQuery"
+              aria-label="Search trending markets"
+              placeholder="Search by question or description"
+              class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
+            />
+            <p class="text-xs text-gray-500" aria-live="polite">
+              <span x-text="filteredMarkets.length"></span>
+              of
+              <span x-text="markets.length"></span>
+              trending markets shown
+            </p>
+          </div>
+
           <div class="space-y-4">
-            <template x-for="market in markets" :key="market.id">
+            <template x-for="market in filteredMarkets" :key="market.id">
               <div
                 class="bg-gray-800 rounded-xl p-5 border border-gray-700 hover:border-blue-500 transition-colors"
               >
@@ -129,6 +149,13 @@
             </template>
 
             <div
+              x-show="markets.length > 0 && filteredMarkets.length === 0"
+              class="text-gray-500 text-center py-10"
+            >
+              No trending markets match your search.
+            </div>
+
+            <div
               x-show="markets.length === 0"
               class="text-gray-500 text-center py-10"
             >
@@ -195,6 +222,18 @@
         return {
           markets: [],
           leaderboard: [],
+          searchQuery: "",
+          get filteredMarkets() {
+            const query = this.searchQuery.trim().toLowerCase();
+            if (!query) return this.markets;
+            return this.markets.filter((market) =>
+              [market.question, market.description]
+                .filter(Boolean)
+                .join(" ")
+                .toLowerCase()
+                .includes(query),
+            );
+          },
           init() {
             this.fetchMarkets();
             this.fetchLeaderboard();

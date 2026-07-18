@@ -75,6 +75,16 @@ def test_public_page_labels_trending_markets():
     assert "Trending Markets (24h volume)" in response.text
 
 
+def test_public_page_has_trending_market_search():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert 'aria-label="Search trending markets"' in html
+    assert 'x-for="market in filteredMarkets"' in html
+    assert "No trending markets match your search." in html
+    assert "get filteredMarkets()" in html
+
+
 def test_admin_page_has_loading_empty_and_error_states():
     response = client.get("/admin")
     assert response.status_code == 200
