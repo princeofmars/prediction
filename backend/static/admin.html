@@ -107,6 +107,15 @@
                 </div>
               </div>
             </template>
+            <p x-show="marketsLoading" class="text-sm text-gray-500 text-center py-4">
+              Loading markets...
+            </p>
+            <p
+              x-show="!marketsLoading && markets.length === 0"
+              class="text-sm text-gray-500 text-center py-4"
+            >
+              No open markets. Use Sync Polymarket to load markets.
+            </p>
           </div>
         </div>
 
@@ -169,6 +178,15 @@
                 </div>
               </div>
             </template>
+            <p x-show="agentsLoading" class="text-sm text-gray-500 text-center py-4">
+              Loading agents...
+            </p>
+            <p
+              x-show="!agentsLoading && agents.length === 0"
+              class="text-sm text-gray-500 text-center py-4"
+            >
+              No agents deployed yet. Create an agent above.
+            </p>
           </div>
         </div>
       </div>
@@ -179,6 +197,8 @@
         return {
           markets: [],
           agents: [],
+          marketsLoading: true,
+          agentsLoading: true,
           syncing: false,
           error: "",
           successMessage: "",
@@ -210,12 +230,32 @@
             return data;
           },
           async fetchMarkets() {
-            const res = await fetch("/markets");
-            this.markets = await res.json();
+            this.marketsLoading = true;
+            try {
+              const res = await fetch("/markets");
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              const data = await res.json();
+              if (!Array.isArray(data)) throw new Error("Invalid markets response");
+              this.markets = data;
+            } catch (e) {
+              this.error = `Failed to load markets: ${e.message}`;
+            } finally {
+              this.marketsLoading = false;
+            }
           },
           async fetchAgents() {
-            const res = await fetch("/leaderboard");
-            this.agents = await res.json();
+            this.agentsLoading = true;
+            try {
+              const res = await fetch("/leaderboard");
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              const data = await res.json();
+              if (!Array.isArray(data)) throw new Error("Invalid leaderboard response");
+              this.agents = data;
+            } catch (e) {
+              this.error = `Failed to load agents: ${e.message}`;
+            } finally {
+              this.agentsLoading = false;
+            }
           },
           async syncMarkets() {
             this.syncing = true;

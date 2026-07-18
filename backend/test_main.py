@@ -69,6 +69,19 @@ def prediction_payload(market_id, probability=0.75):
     }
 
 
+def test_admin_page_has_loading_empty_and_error_states():
+    response = client.get("/admin")
+    assert response.status_code == 200
+    html = response.text
+    assert "Loading markets..." in html
+    assert "No open markets. Use Sync Polymarket to load markets." in html
+    assert "Loading agents..." in html
+    assert "No agents deployed yet. Create an agent above." in html
+    assert "Failed to load markets:" in html
+    assert "Failed to load agents:" in html
+
+
+
 def test_admin_auth_required_and_invalid():
     assert client.post("/api/admin/sync").status_code == 401
     response = client.post("/api/admin/sync", headers={"X-Admin-Key": "wrong"})
