@@ -51,14 +51,26 @@
             <label for="market-search" class="text-sm font-medium text-gray-200">
               Search trending markets
             </label>
-            <input
-              id="market-search"
-              type="search"
-              x-model.debounce.200ms="searchQuery"
-              aria-label="Search trending markets"
-              placeholder="Search by question or description"
-              class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
-            />
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <input
+                id="market-search"
+                type="search"
+                x-model.debounce.200ms="searchQuery"
+                aria-label="Search trending markets"
+                placeholder="Search by question or description"
+                class="sm:col-span-2 w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
+              />
+              <select
+                x-model="sortMode"
+                aria-label="Sort trending markets"
+                class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+              >
+                <option value="trending">Trending order</option>
+                <option value="probability-desc">Highest YES probability</option>
+                <option value="probability-asc">Lowest YES probability</option>
+                <option value="closing-soon">Closing soon</option>
+              </select>
+            </div>
             <div class="flex flex-wrap items-center justify-between gap-3">
               <p class="text-xs text-gray-500" aria-live="polite">
                 <span x-text="filteredMarkets.length"></span>
@@ -237,18 +249,47 @@
           markets: [],
           leaderboard: [],
           searchQuery: "",
+          sortMode: "trending",
           refreshing: false,
           lastUpdated: "",
           get filteredMarkets() {
             const query = this.searchQuery.trim().toLowerCase();
-            if (!query) return this.markets;
-            return this.markets.filter((market) =>
-              [market.question, market.description]
-                .filter(Boolean)
-                .join(" ")
-                .toLowerCase()
-                .includes(query),
-            );
+            const filtered = query
+              ? this.markets.filter((market) =>
+                  [market.question, market.description]
+                    .filter(Boolean)
+                    .join(" ")
+                    .toLowerCase()
+                    .includes(query),
+                )
+              : this.markets;
+
+            if (this.sortMode === "probability-desc") {
+              return [...filtered].sort(
+                (a, b) =>
+                  (b.market_probability ?? -1) -
+                  (a.market_probability ?? -1),
+              );
+            }
+            if (this.sortMode === "probability-asc") {
+              return [...filtered].sort(
+                (a, b) =>
+                  (a.market_probability ?? 2) -
+                  (b.market_probability ?? 2),
+              );
+            }
+            if (this.sortMode === "closing-soon") {
+              return [...filtered].sort((a, b) => {
+                const aTime = a.end_date
+                  ? new Date(a.end_date).getTime()
+                  : Number.MAX_SAFE_INTEGER;
+                const bTime = b.end_date
+                  ? new Date(b.end_date).getTime()
+                  : Number.MAX_SAFE_INTEGER;
+                return aTime - bTime;
+              });
+            }
+            return filtered;
           },
           init() {
             this.refreshData();

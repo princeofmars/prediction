@@ -85,6 +85,18 @@ def test_public_page_has_trending_market_search():
     assert "get filteredMarkets()" in html
 
 
+def test_public_page_can_sort_trending_markets():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert 'aria-label="Sort trending markets"' in html
+    assert '<option value="trending">Trending order</option>' in html
+    assert '<option value="probability-desc">Highest YES probability</option>' in html
+    assert '<option value="probability-asc">Lowest YES probability</option>' in html
+    assert '<option value="closing-soon">Closing soon</option>' in html
+    assert 'sortMode: "trending"' in html
+
+
 def test_public_page_has_manual_data_refresh():
     response = client.get("/")
     assert response.status_code == 200
