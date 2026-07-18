@@ -85,6 +85,18 @@ def test_public_page_has_trending_market_search():
     assert "get filteredMarkets()" in html
 
 
+def test_public_page_supports_local_market_favorites():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert 'aria-label="Show favorite markets only"' in html
+    assert '@click="toggleFavorite(market.id)"' in html
+    assert ':aria-pressed="isFavorite(market.id)"' in html
+    assert '"favoriteMarketIds"' in html
+    assert 'localStorage.setItem(' in html
+    assert "showFavoritesOnly: false" in html
+
+
 def test_public_page_shows_market_time_remaining():
     response = client.get("/")
     assert response.status_code == 200

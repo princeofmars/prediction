@@ -81,6 +81,19 @@
                   Updated <span x-text="lastUpdated"></span>
                 </span>
               </p>
+              <label
+                class="flex items-center gap-2 text-xs text-gray-300 cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  x-model="showFavoritesOnly"
+                  aria-label="Show favorite markets only"
+                  class="rounded border-gray-600 bg-gray-900 text-blue-500"
+                />
+                <span
+                  x-text="'Favorites only (' + favoriteMarketIds.length + ')'"
+                ></span>
+              </label>
               <button
                 type="button"
                 @click="refreshData"
@@ -103,10 +116,24 @@
                     class="text-lg font-medium text-gray-100"
                     x-text="market.question"
                   ></h3>
-                  <span
-                    class="bg-blue-900 text-blue-300 text-xs px-2 py-1 rounded-full uppercase tracking-wider"
-                    x-text="market.source"
-                  ></span>
+                  <div class="flex items-center gap-2">
+                    <span
+                      class="bg-blue-900 text-blue-300 text-xs px-2 py-1 rounded-full uppercase tracking-wider"
+                      x-text="market.source"
+                    ></span>
+                    <button
+                      type="button"
+                      @click="toggleFavorite(market.id)"
+                      :aria-pressed="isFavorite(market.id)"
+                      :aria-label="isFavorite(market.id) ? 'Remove from favorites' : 'Add to favorites'"
+                      class="text-xl leading-none text-amber-300 hover:text-amber-200"
+                    >
+                      <span
+                        aria-hidden="true"
+                        x-text="isFavorite(market.id) ? '★' : '☆'"
+                      ></span>
+                    </button>
+                  </div>
                 </div>
 
                 <div class="grid grid-cols-2 gap-3 text-xs text-gray-400 mb-4">
@@ -282,19 +309,24 @@
           leaderboard: [],
           searchQuery: "",
           sortMode: "trending",
+          favoriteMarketIds: [],
+          showFavoritesOnly: false,
           refreshing: false,
           lastUpdated: "",
           get filteredMarkets() {
             const query = this.searchQuery.trim().toLowerCase();
+            const favoriteFiltered = this.showFavoritesOnly
+              ? this.markets.filter((market) => this.isFavorite(market.id))
+              : this.markets;
             const filtered = query
-              ? this.markets.filter((market) =>
+              ? favoriteFiltered.filter((market) =>
                   [market.question, market.description]
                     .filter(Boolean)
                     .join(" ")
                     .toLowerCase()
                     .includes(query),
                 )
-              : this.markets;
+              : favoriteFiltered;
 
             if (this.sortMode === "probability-desc") {
               return [...filtered].sort(
@@ -323,6 +355,35 @@
             }
             return filtered;
           },
+          loadFavorites() {
+            try {
+              const stored = JSON.parse(
+                localStorage.getItem("favoriteMarketIds") || "[]",
+              );
+              this.favoriteMarketIds = Array.isArray(stored) ? stored : [];
+            } catch {
+              this.favoriteMarketIds = [];
+            }
+          },
+          persistFavorites() {
+            try {
+              localStorage.setItem(
+                "favoriteMarketIds",
+                JSON.stringify(this.favoriteMarketIds),
+              );
+            } catch {
+              // Favorites remain available for the current page session.
+            }
+          },
+          isFavorite(marketId) {
+            return this.favoriteMarketIds.includes(marketId);
+          },
+          toggleFavorite(marketId) {
+            this.favoriteMarketIds = this.isFavorite(marketId)
+              ? this.favoriteMarketIds.filter((id) => id !== marketId)
+              : [...this.favoriteMarketIds, marketId];
+            this.persistFavorites();
+          },
           formatTimeRemaining(endDate) {
             if (!endDate) return "";
             const endTime = new Date(endDate).getTime();
@@ -335,6 +396,7 @@
             return `${Math.ceil(hours / 24)}d left`;
           },
           init() {
+            this.loadFavorites();
             this.refreshData();
           },
           async refreshData() {
