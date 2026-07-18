@@ -24,8 +24,8 @@ def sync_markets_logic(db: Session = None):
         db.commit()
         return added
     except Exception as e:
-        print(f"Sync error: {e}")
-        return 0
+        db.rollback()
+        raise RuntimeError(f"Sync failed: {str(e)}")
     finally:
         if close_db:
             db.close()
