@@ -124,6 +124,34 @@
                     ></span>
                   </div>
                 </div>
+                <div
+                  x-show="market.market_probability !== null"
+                  class="mb-4"
+                >
+                  <div
+                    role="progressbar"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                    :aria-valuenow="Math.round(market.market_probability * 100)"
+                    :aria-label="'Crowd YES probability ' + Math.round(market.market_probability * 100) + '%'"
+                    class="h-2 bg-red-900 rounded-full overflow-hidden"
+                  >
+                    <div
+                      class="h-full bg-blue-500 transition-all"
+                      :style="`width: ${Math.round(market.market_probability * 100)}%`"
+                    ></div>
+                  </div>
+                  <div class="flex justify-between mt-1 text-[10px] font-mono">
+                    <span
+                      class="text-blue-300"
+                      x-text="'YES ' + Math.round(market.market_probability * 100) + '%'"
+                    ></span>
+                    <span
+                      class="text-red-300"
+                      x-text="'NO ' + Math.round((1 - market.market_probability) * 100) + '%'"
+                    ></span>
+                  </div>
+                </div>
                 <p
                   x-show="market.description"
                   class="text-sm text-gray-400 mb-4 line-clamp-3"

@@ -85,6 +85,18 @@ def test_public_page_has_trending_market_search():
     assert "get filteredMarkets()" in html
 
 
+def test_public_page_has_accessible_probability_meter():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert 'role="progressbar"' in html
+    assert 'aria-valuemin="0"' in html
+    assert 'aria-valuemax="100"' in html
+    assert ':aria-valuenow="Math.round(market.market_probability * 100)"' in html
+    assert "Crowd YES probability " in html
+    assert "Math.round((1 - market.market_probability) * 100)" in html
+
+
 def test_public_page_can_sort_trending_markets():
     response = client.get("/")
     assert response.status_code == 200
