@@ -186,6 +186,23 @@ def test_public_page_can_sort_trending_markets():
     assert 'sortMode: "trending"' in html
 
 
+def test_public_page_distinguishes_market_loading_and_empty_states():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert "marketsLoading: true" in html
+    assert "marketsLoadFailed: false" in html
+    assert "this.marketsLoading = true" in html
+    assert "this.marketsLoading = false" in html
+    assert "this.marketsLoadFailed = true" in html
+    assert 'x-show="marketsLoading"' in html
+    assert "Loading trending markets..." in html
+    assert "No trending markets are available yet." in html
+    assert 'href="/admin"' in html
+    assert "Open admin to sync Polymarket" in html
+    assert "Loading markets or no markets available..." not in html
+
+
 def test_public_page_shows_data_loading_errors_with_retry():
     response = client.get("/")
     assert response.status_code == 200

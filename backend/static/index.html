@@ -293,10 +293,24 @@
             </div>
 
             <div
-              x-show="markets.length === 0"
+              x-show="marketsLoading"
+              aria-live="polite"
+              class="text-gray-400 text-center py-10"
+            >
+              Loading trending markets...
+            </div>
+
+            <div
+              x-show="!marketsLoading && !marketsLoadFailed && markets.length === 0"
               class="text-gray-500 text-center py-10"
             >
-              Loading markets or no markets available...
+              <p>No trending markets are available yet.</p>
+              <a
+                href="/admin"
+                class="inline-block mt-2 text-blue-400 hover:text-blue-300"
+              >
+                Open admin to sync Polymarket
+              </a>
             </div>
           </div>
         </div>
@@ -384,6 +398,8 @@
           autoRefreshEnabled: false,
           autoRefreshTimer: null,
           dataErrors: [],
+          marketsLoading: true,
+          marketsLoadFailed: false,
           get filteredMarkets() {
             const query = this.searchQuery.trim().toLowerCase();
             const favoriteFiltered = this.showFavoritesOnly
@@ -525,6 +541,8 @@
             }
           },
           async fetchMarkets() {
+            this.marketsLoading = true;
+            this.marketsLoadFailed = false;
             try {
               const res = await fetch("/markets");
               if (!res.ok)
@@ -543,9 +561,12 @@
               );
               return true;
             } catch (e) {
+              this.marketsLoadFailed = true;
               this.dataErrors.push("Trending markets could not be loaded.");
               console.error("Failed to fetch markets", e);
               return false;
+            } finally {
+              this.marketsLoading = false;
             }
           },
           async fetchLeaderboard() {
