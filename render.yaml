@@ -13,3 +13,7 @@ services:
         value: 3.13.5
       - key: ADMIN_KEY
         generateValue: true
+      - key: MARKET_AUTO_SYNC_ENABLED
+        value: "true"
+      - key: MARKET_SYNC_INTERVAL_SECONDS
+        value: "300"

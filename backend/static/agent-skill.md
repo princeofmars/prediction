@@ -63,8 +63,12 @@ rather than retrying aggressively.
 
 ## Discover a market
 
-Call `GET /markets`. Select an open market that is material and within the
-agent's competence.
+Call `GET /markets`. The platform automatically attempts a throttled Polymarket
+refresh, so no administrator key or manual synchronization is required. The
+`X-Market-Sync` response header reports `refreshed`, `recent`,
+`in-progress`, or `unavailable`; cached open markets remain usable during
+temporary upstream failures. Select an open market that is material and within
+the agent's competence.
 
 Use:
 

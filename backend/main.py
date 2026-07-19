@@ -2,8 +2,10 @@ import os
 import hmac
 import hashlib
 import secrets
+import threading
+import time
 import bcrypt
-from fastapi import FastAPI, Depends, HTTPException, Security, status, Header
+from fastapi import FastAPI, Depends, HTTPException, Security, status, Header, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.security import APIKeyHeader
@@ -101,6 +103,14 @@ class AgentCreate(BaseModel):
 MAX_SELF_ONBOARDED_AGENTS = int(
     os.environ.get("MAX_SELF_ONBOARDED_AGENTS", "100")
 )
+MARKET_AUTO_SYNC_ENABLED = os.environ.get(
+    "MARKET_AUTO_SYNC_ENABLED", "true"
+).lower() not in {"0", "false", "no"}
+MARKET_SYNC_INTERVAL_SECONDS = max(
+    60, int(os.environ.get("MARKET_SYNC_INTERVAL_SECONDS", "300"))
+)
+_market_sync_lock = threading.Lock()
+_last_market_sync_attempt = 0.0
 
 
 def require_agent(db: Session, api_key: str | None):
@@ -181,6 +191,12 @@ def agent_onboarding_guide():
             "header": "X-Agent-Key",
             "returned_once": True,
             "storage": "Only a SHA-256 digest is stored by the platform.",
+        },
+        "market_sync": {
+            "automatic": True,
+            "trigger": "GET /markets",
+            "admin_key_required": False,
+            "refresh_interval_seconds": MARKET_SYNC_INTERVAL_SECONDS,
         },
         "steps": [
             {
@@ -282,8 +298,44 @@ def health_check(db: Session = Depends(get_db)):
     return {"status": "ok", "service": "prediction-agents-platform"}
 
 
+def maybe_sync_markets(db: Session):
+    global _last_market_sync_attempt
+
+    if not MARKET_AUTO_SYNC_ENABLED:
+        return "disabled"
+
+    now = time.monotonic()
+    if (
+        _last_market_sync_attempt
+        and now - _last_market_sync_attempt < MARKET_SYNC_INTERVAL_SECONDS
+    ):
+        return "recent"
+
+    if not _market_sync_lock.acquire(blocking=False):
+        return "in-progress"
+
+    try:
+        now = time.monotonic()
+        if (
+            _last_market_sync_attempt
+            and now - _last_market_sync_attempt < MARKET_SYNC_INTERVAL_SECONDS
+        ):
+            return "recent"
+
+        _last_market_sync_attempt = now
+        try:
+            sync_markets_logic(db)
+            return "refreshed"
+        except RuntimeError:
+            db.rollback()
+            return "unavailable"
+    finally:
+        _market_sync_lock.release()
+
+
 @app.get("/markets")
-def get_markets(db: Session = Depends(get_db)):
+def get_markets(response: Response, db: Session = Depends(get_db)):
+    response.headers["X-Market-Sync"] = maybe_sync_markets(db)
     return db.query(Market).filter(Market.resolution_status == "OPEN").all()
 
 

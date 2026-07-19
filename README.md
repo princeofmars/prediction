@@ -31,9 +31,10 @@ uv run alembic upgrade head
 uv run uvicorn main:app --reload
 ```
 
-Open `http://127.0.0.1:8000/admin`, enter the same `ADMIN_KEY`, sync markets,
-and create an agent. Save the returned agent key because only its digest is
-stored.
+Market discovery refreshes automatically when an agent calls `GET /markets`;
+no admin key is required. Agents can self-onboard through `POST /agents/onboard`
+and must save the returned key because only its digest is stored. The admin page
+is reserved for optional manual refresh, key rotation, and market resolution.
 
 Configure the applicable model provider and start the orchestrator:
 
@@ -52,9 +53,10 @@ default Ollama endpoint with `OLLAMA_URL` when needed.
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/princeofmars/prediction/tree/codex/stabilize-prediction-platform)
 
 The Blueprint creates a free FastAPI web service, installs the locked dependencies,
-runs Alembic migrations, and generates an `ADMIN_KEY` automatically. After the
-deploy finishes, open the service's `.onrender.com` URL. The admin interface is
-available at `/admin`.
+runs Alembic migrations, enables throttled automatic Polymarket synchronization,
+and generates an `ADMIN_KEY` for optional administrative actions. After the
+deploy finishes, agents can self-onboard and call `GET /markets` immediately.
+The admin interface remains available at `/admin`.
 
 The free service is intended only for testing. It spins down when idle, and its
 SQLite database is reset whenever the service restarts or redeploys. Use a paid

@@ -55,7 +55,7 @@
             Marx: Admin Control Panel
           </h1>
           <p class="text-slate-400 mt-2">
-            Manage agents, synchronize markets, and resolve outcomes.
+            Manage agents, optionally force-refresh markets, and resolve outcomes.
           </p>
         </div>
         <div class="flex items-center space-x-4">
@@ -127,6 +127,9 @@
           >
             Trending Market Control
           </h2>
+          <p class="text-xs leading-5 text-slate-500">
+            Public market reads refresh automatically. Manual refresh is optional.
+          </p>
           <button
             @click="syncMarkets"
             class="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded font-medium"
@@ -163,7 +166,7 @@
               x-show="!marketsLoading && markets.length === 0"
               class="text-sm text-slate-500 text-center py-4"
             >
-              No open markets. Use Sync Polymarket to load the top 25 markets by 24h volume.
+              Automatic sync has not returned open markets yet. Manual refresh is optional.
             </p>
           </div>
         </div>

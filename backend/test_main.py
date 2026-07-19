@@ -13,6 +13,7 @@ TEST_DB_FILE = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
 TEST_DB_FILE.close()
 os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB_FILE.name}"
 os.environ["ADMIN_KEY"] = "test-admin-key"
+os.environ["MARKET_AUTO_SYNC_ENABLED"] = "false"
 
 from alembic import command  # noqa: E402
 from alembic.config import Config  # noqa: E402
@@ -227,8 +228,8 @@ def test_public_page_distinguishes_market_loading_and_empty_states():
     assert 'x-show="marketsLoading"' in html
     assert "Loading trending markets..." in html
     assert "No trending markets are available yet." in html
-    assert 'href="/admin"' in html
-    assert "Open admin to sync Polymarket" in html
+    assert "Markets refresh automatically from Polymarket." in html
+    assert "Open admin to sync Polymarket" not in html
     assert "Loading markets or no markets available..." not in html
 
 
@@ -295,7 +296,8 @@ def test_admin_page_has_loading_empty_and_error_states():
     assert response.status_code == 200
     html = response.text
     assert "Loading markets..." in html
-    assert "No open markets. Use Sync Polymarket to load the top 25 markets by 24h volume." in html
+    assert "Automatic sync has not returned open markets yet." in html
+    assert "Manual refresh is optional." in html
     assert "Loading agents..." in html
     assert "No agents deployed yet. Create an agent above." in html
     assert "Failed to load markets:" in html
@@ -411,6 +413,12 @@ def test_onboarding_guide_documents_predict_before_consensus():
     assert data["workflow"] == "predict_before_consensus"
     assert data["skill_url"] == "/agent-skill.md"
     assert data["credential"]["returned_once"] is True
+    assert data["market_sync"] == {
+        "automatic": True,
+        "trigger": "GET /markets",
+        "admin_key_required": False,
+        "refresh_interval_seconds": 300,
+    }
     assert data["steps"][0]["path"] == "/agents/onboard"
     forecast_step = data["steps"][2]
     assert forecast_step["path"] == "/predictions"
@@ -582,6 +590,65 @@ def test_bcrypt_release_key_is_accepted_and_upgraded():
     with SessionLocal() as db:
         stored = db.query(Agent).one().hashed_api_key
         assert stored == hashlib.sha256(raw_key.encode()).hexdigest()
+
+
+@patch("main.sync_markets_logic")
+def test_public_markets_auto_sync_without_admin_key(mock_sync, monkeypatch):
+    import main as main_module
+
+    monkeypatch.setattr(main_module, "MARKET_AUTO_SYNC_ENABLED", True)
+    monkeypatch.setattr(main_module, "_last_market_sync_attempt", 0.0)
+
+    def populate_markets(db):
+        db.add(
+            Market(
+                source_market_id="auto-sync-market",
+                source="Polymarket",
+                question="Will automatic synchronization work?",
+                resolution_status="OPEN",
+            )
+        )
+        db.commit()
+        return {"added": 1, "updated": 0, "hidden": 0}
+
+    mock_sync.side_effect = populate_markets
+
+    first = client.get("/markets")
+    second = client.get("/markets")
+
+    assert first.status_code == 200
+    assert first.headers["x-market-sync"] == "refreshed"
+    assert first.json()[0]["source_market_id"] == "auto-sync-market"
+    assert second.status_code == 200
+    assert second.headers["x-market-sync"] == "recent"
+    mock_sync.assert_called_once()
+
+
+@patch("main.sync_markets_logic")
+def test_public_markets_serve_cached_data_when_auto_sync_fails(
+    mock_sync, monkeypatch
+):
+    import main as main_module
+
+    monkeypatch.setattr(main_module, "MARKET_AUTO_SYNC_ENABLED", True)
+    monkeypatch.setattr(main_module, "_last_market_sync_attempt", 0.0)
+    with SessionLocal() as db:
+        db.add(
+            Market(
+                source_market_id="cached-market",
+                source="Polymarket",
+                question="Will cached markets remain available?",
+                resolution_status="OPEN",
+            )
+        )
+        db.commit()
+
+    mock_sync.side_effect = RuntimeError("Polymarket unavailable")
+    response = client.get("/markets")
+
+    assert response.status_code == 200
+    assert response.headers["x-market-sync"] == "unavailable"
+    assert response.json()[0]["source_market_id"] == "cached-market"
 
 
 @patch("sync_polymarket.requests.get")
