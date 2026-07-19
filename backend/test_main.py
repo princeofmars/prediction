@@ -186,6 +186,21 @@ def test_public_page_can_sort_trending_markets():
     assert 'sortMode: "trending"' in html
 
 
+def test_public_page_shows_data_loading_errors_with_retry():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert 'role="alert"' in html
+    assert 'aria-live="assertive"' in html
+    assert "dataErrors: []" in html
+    assert "this.dataErrors = []" in html
+    assert 'Trending markets could not be loaded.' in html
+    assert 'Leaderboard could not be loaded.' in html
+    assert 'x-text="dataErrors.join(\' \')"' in html
+    assert '@click="refreshData"' in html
+    assert "Try again" in html
+
+
 def test_public_page_has_manual_data_refresh():
     response = client.get("/")
     assert response.status_code == 200

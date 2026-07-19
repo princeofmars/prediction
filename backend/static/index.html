@@ -51,6 +51,24 @@
         </div>
       </header>
 
+      <div
+        x-show="dataErrors.length > 0"
+        x-cloak
+        role="alert"
+        aria-live="assertive"
+        class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-red-700 bg-red-950 px-4 py-3 text-sm text-red-200"
+      >
+        <span x-text="dataErrors.join(' ')"></span>
+        <button
+          type="button"
+          @click="refreshData"
+          :disabled="refreshing"
+          class="self-start sm:self-auto rounded bg-red-800 px-3 py-1.5 font-medium hover:bg-red-700 disabled:opacity-50"
+        >
+          Try again
+        </button>
+      </div>
+
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <!-- Left Column: Markets -->
         <div class="lg:col-span-2 space-y-6">
@@ -365,6 +383,7 @@
           healthStatus: "Checking...",
           autoRefreshEnabled: false,
           autoRefreshTimer: null,
+          dataErrors: [],
           get filteredMarkets() {
             const query = this.searchQuery.trim().toLowerCase();
             const favoriteFiltered = this.showFavoritesOnly
@@ -471,6 +490,7 @@
           async refreshData() {
             if (this.refreshing) return;
             this.refreshing = true;
+            this.dataErrors = [];
             try {
               const [healthOk, marketsOk, leaderboardOk] = await Promise.all([
                 this.fetchHealth(),
@@ -523,6 +543,7 @@
               );
               return true;
             } catch (e) {
+              this.dataErrors.push("Trending markets could not be loaded.");
               console.error("Failed to fetch markets", e);
               return false;
             }
@@ -535,6 +556,7 @@
               this.leaderboard = await res.json();
               return true;
             } catch (e) {
+              this.dataErrors.push("Leaderboard could not be loaded.");
               console.error("Failed to fetch leaderboard", e);
               return false;
             }
