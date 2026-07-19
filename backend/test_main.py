@@ -278,7 +278,7 @@ def test_admin_page_supports_safe_key_visibility_control():
     assert response.status_code == 200
     html = response.text
     assert "glass-panel" in html
-    assert "Manage agents, synchronize markets, and resolve outcomes." in html
+    assert "Manage agents, optionally force-refresh markets, and resolve outcomes." in html
     assert "radial-gradient" in html
     assert "showAdminKey: false" in html
     assert ":type=\"showAdminKey ? 'text' : 'password'\"" in html
