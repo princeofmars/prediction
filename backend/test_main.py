@@ -78,6 +78,18 @@ def test_health_endpoint_checks_database():
     }
 
 
+def test_public_page_explains_agent_onboarding_and_consensus_unlock():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert "AI agents: predict first, then compare" in html
+    assert "Self-onboard and save the one-time API key." in html
+    assert "Unlock peer forecasts and consensus." in html
+    assert 'href="/agents/onboarding"' in html
+    assert "Agent forecasts unlock only after your agent submits" in html
+    assert "market.predictions" not in html
+
+
 def test_public_page_shows_service_health_status():
     response = client.get("/")
     assert response.status_code == 200
@@ -319,6 +331,80 @@ def test_agent_creation_hashes_key_and_duplicate_is_conflict():
     assert duplicate.status_code == 409
 
 
+def test_agent_can_self_onboard_and_receives_one_time_key():
+    response = client.post(
+        "/agents/onboard",
+        json={"name": "Self Agent", "model": "gpt-4o-mini"},
+    )
+    assert response.status_code == 201
+    data = response.json()
+    raw_key = data["api_key"]
+    assert data["agent"]["name"] == "Self Agent"
+    assert "shown once" in data["credential_notice"]
+
+    with SessionLocal() as db:
+        agent = db.query(Agent).filter(Agent.name == "Self Agent").one()
+        assert agent.hashed_api_key == hashlib.sha256(raw_key.encode()).hexdigest()
+        assert agent.hashed_api_key != raw_key
+
+    duplicate = client.post(
+        "/agents/onboard",
+        json={"name": "Self Agent", "model": "gpt-4o-mini"},
+    )
+    assert duplicate.status_code == 409
+
+
+def test_onboarding_guide_documents_predict_before_consensus():
+    response = client.get("/agents/onboarding")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["workflow"] == "predict_before_consensus"
+    assert data["credential"]["returned_once"] is True
+    assert data["steps"][0]["path"] == "/agents/onboard"
+    assert data["steps"][-1]["requires"]
+
+
+def test_peer_consensus_is_revealed_only_after_own_prediction():
+    market_id = create_market()
+    first_key = create_agent("First Agent")
+    second_key = create_agent("Second Agent")
+
+    first_vote = client.post(
+        "/predictions",
+        json=prediction_payload(market_id, probability=0.8),
+        headers={"X-Agent-Key": first_key},
+    )
+    assert first_vote.status_code == 200
+    assert first_vote.json()["peer_consensus"]["peer_count"] == 0
+
+    locked = client.get(
+        f"/markets/{market_id}/predictions",
+        headers={"X-Agent-Key": second_key},
+    )
+    assert locked.status_code == 403
+    assert "Submit your own prediction" in locked.json()["detail"]
+
+    second_vote = client.post(
+        "/predictions",
+        json=prediction_payload(market_id, probability=0.4),
+        headers={"X-Agent-Key": second_key},
+    )
+    assert second_vote.status_code == 200
+    revealed = second_vote.json()["peer_consensus"]
+    assert revealed["revealed"] is True
+    assert revealed["peer_count"] == 1
+    assert revealed["mean_probability_yes"] == pytest.approx(0.8)
+    assert revealed["forecasts"][0]["agent_name"] == "First Agent"
+
+    later = client.get(
+        f"/markets/{market_id}/predictions",
+        headers={"X-Agent-Key": second_key},
+    )
+    assert later.status_code == 200
+    assert later.json()["own_forecast"]["probability_yes"] == pytest.approx(0.4)
+    assert later.json()["peer_consensus"]["peer_count"] == 1
+
+
 def test_prediction_auth_validation_and_duplicate_protection():
     market_id = create_market()
     raw_key = create_agent()
@@ -350,7 +436,7 @@ def test_prediction_auth_validation_and_duplicate_protection():
     assert duplicate.status_code == 409
 
 
-def test_public_predictions_and_brier_scoring():
+def test_gated_predictions_and_brier_scoring():
     market_id = create_market()
     raw_key = create_agent()
     response = client.post(
@@ -360,10 +446,14 @@ def test_public_predictions_and_brier_scoring():
     )
     assert response.status_code == 200
 
-    public_predictions = client.get(f"/markets/{market_id}/predictions")
-    assert public_predictions.status_code == 200
-    assert public_predictions.json()[0]["agent_name"] == "Test Agent"
-    assert public_predictions.json()[0]["probability_yes"] == 0.75
+    assert client.get(f"/markets/{market_id}/predictions").status_code == 401
+    revealed = client.get(
+        f"/markets/{market_id}/predictions",
+        headers={"X-Agent-Key": raw_key},
+    )
+    assert revealed.status_code == 200
+    assert revealed.json()["own_forecast"]["probability_yes"] == 0.75
+    assert revealed.json()["peer_consensus"]["peer_count"] == 0
 
     resolved = client.post(
         f"/api/admin/markets/{market_id}/resolve?status=RESOLVED_YES",

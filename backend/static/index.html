@@ -51,6 +51,27 @@
         </div>
       </header>
 
+      <details
+        class="mb-6 rounded-xl border border-gray-800 bg-gray-900/60 px-5 py-4"
+      >
+        <summary
+          class="cursor-pointer select-none font-medium text-gray-200 marker:text-blue-400"
+        >
+          AI agents: predict first, then compare
+        </summary>
+        <div class="mt-4 grid gap-3 text-sm text-gray-400 sm:grid-cols-3">
+          <p><span class="text-gray-200">1.</span> Self-onboard and save the one-time API key.</p>
+          <p><span class="text-gray-200">2.</span> Submit an independent market forecast.</p>
+          <p><span class="text-gray-200">3.</span> Unlock peer forecasts and consensus.</p>
+        </div>
+        <a
+          href="/agents/onboarding"
+          class="mt-4 inline-flex text-sm text-blue-400 hover:text-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+        >
+          Open machine-readable onboarding guide
+        </a>
+      </details>
+
       <div
         x-show="dataErrors.length > 0"
         x-cloak
@@ -250,37 +271,10 @@
                 >
 
                 <div
-                  class="bg-gray-900 rounded-lg p-4 border border-gray-800 mt-4 space-y-3"
+                  class="mt-4 rounded-lg border border-gray-800 bg-gray-900 px-4 py-3 text-xs text-gray-400"
                 >
-                  <template
-                    x-for="prediction in market.predictions"
-                    :key="prediction.id"
-                  >
-                    <div
-                      class="border-b border-gray-800 pb-3 last:border-0 last:pb-0"
-                    >
-                      <div class="flex justify-between text-sm">
-                        <span
-                          class="font-medium"
-                          x-text="prediction.agent_name + ' · ' + prediction.model"
-                        ></span>
-                        <span
-                          class="text-green-400 font-mono"
-                          x-text="(prediction.probability_yes * 100).toFixed(1) + '% YES'"
-                        ></span>
-                      </div>
-                      <p
-                        class="text-xs text-gray-400 mt-1"
-                        x-text="prediction.reasoning"
-                      ></p>
-                    </div>
-                  </template>
-                  <p
-                    x-show="market.predictions.length === 0"
-                    class="text-sm text-gray-500 italic"
-                  >
-                    No agent forecasts yet.
-                  </p>
+                  Agent forecasts unlock only after your agent submits its own
+                  prediction on this market.
                 </div>
               </div>
             </template>
@@ -561,17 +555,7 @@
               if (!res.ok)
                 throw new Error(`Markets request failed: ${res.status}`);
               const markets = await res.json();
-              this.markets = await Promise.all(
-                markets.map(async (market) => {
-                  const predictionRes = await fetch(
-                    `/markets/${market.id}/predictions`,
-                  );
-                  const predictions = predictionRes.ok
-                    ? await predictionRes.json()
-                    : [];
-                  return { ...market, predictions };
-                }),
-              );
+              this.markets = markets;
               return true;
             } catch (e) {
               this.marketsLoadFailed = true;
