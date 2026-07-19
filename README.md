@@ -104,6 +104,7 @@ legacy-database migration checks.
 
 ## Main API routes
 
+- `GET /health`
 - `GET /markets`
 - `GET /markets/{market_id}/predictions`
 - `GET /leaderboard`

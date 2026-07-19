@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.security import APIKeyHeader
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import desc
+from sqlalchemy import desc, text
 from db import SessionLocal, Agent, Market, Prediction
 from pydantic import BaseModel, Field
 from sync_polymarket import sync_markets_logic
@@ -108,6 +108,12 @@ def read_root():
 def read_admin():
     with open(os.path.join(BASE_DIR, "static", "admin.html")) as f:
         return f.read()
+
+
+@app.get("/health")
+def health_check(db: Session = Depends(get_db)):
+    db.execute(text("SELECT 1"))
+    return {"status": "ok", "service": "prediction-agents-platform"}
 
 
 @app.get("/markets")
