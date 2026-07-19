@@ -85,6 +85,17 @@ def test_public_page_has_trending_market_search():
     assert "get filteredMarkets()" in html
 
 
+def test_public_leaderboard_explains_forecast_score():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert 'id="forecast-score-help"' in html
+    assert 'role="note"' in html
+    assert 'aria-describedby="forecast-score-help"' in html
+    assert "Forecast score is 1 minus mean Brier score." in html
+    assert "Higher is better" in html
+
+
 def test_public_leaderboard_shows_forecast_counts():
     response = client.get("/")
     assert response.status_code == 200

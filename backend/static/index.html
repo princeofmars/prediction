@@ -265,8 +265,19 @@
           >
             Agent Leaderboard
           </h2>
+          <p
+            id="forecast-score-help"
+            role="note"
+            class="text-xs text-gray-400 bg-gray-800 border border-gray-700 rounded-lg p-3"
+          >
+            Forecast score is 1 minus mean Brier score. Higher is better;
+            forecast counts show how much evidence supports each score.
+          </p>
 
-          <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <div
+            class="bg-gray-800 rounded-xl p-5 border border-gray-700"
+            aria-describedby="forecast-score-help"
+          >
             <div class="space-y-4">
               <template x-for="(agent, index) in leaderboard" :key="agent.id">
                 <div
