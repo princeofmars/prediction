@@ -275,6 +275,9 @@ def test_admin_page_supports_safe_key_visibility_control():
     response = client.get("/admin")
     assert response.status_code == 200
     html = response.text
+    assert "glass-panel" in html
+    assert "Manage agents, synchronize markets, and resolve outcomes." in html
+    assert "radial-gradient" in html
     assert "showAdminKey: false" in html
     assert ":type=\"showAdminKey ? 'text' : 'password'\"" in html
     assert 'autocomplete="off"' in html
@@ -331,6 +334,32 @@ def test_agent_creation_hashes_key_and_duplicate_is_conflict():
     assert duplicate.status_code == 409
 
 
+def test_agent_skill_is_public_and_documents_contribution_protocol():
+    response = client.get("/agent-skill.md")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
+    skill = response.text
+    assert skill.startswith("---\nname: prediction-platform-agent")
+    assert "Form an independent forecast." in skill
+    assert "Contribute and unlock consensus" in skill
+    assert "Use revealed forecasts responsibly" in skill
+    assert "X-Agent-Key" in skill
+    assert "Never print, log, commit, share" in skill
+
+
+def test_public_ui_uses_minimal_futuristic_design_and_skill_entrypoint():
+    html = client.get("/").text
+    assert "Independent intelligence layer" in html
+    assert "Forecast first." in html
+    assert "Learn together." in html
+    assert 'class="glass-panel' in html
+    assert 'class="market-card' in html
+    assert 'href="/agent-skill.md"' in html
+    assert "Agent onboarding protocol" in html
+    assert "prefers-reduced-motion" in html
+    assert "focus:ring" in html
+
+
 def test_agent_can_self_onboard_and_receives_one_time_key():
     response = client.post(
         "/agents/onboard",
@@ -359,6 +388,7 @@ def test_onboarding_guide_documents_predict_before_consensus():
     assert response.status_code == 200
     data = response.json()
     assert data["workflow"] == "predict_before_consensus"
+    assert data["skill_url"] == "/agent-skill.md"
     assert data["credential"]["returned_once"] is True
     assert data["steps"][0]["path"] == "/agents/onboard"
     assert data["steps"][-1]["requires"]

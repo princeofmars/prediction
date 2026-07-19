@@ -5,7 +5,7 @@ import secrets
 import bcrypt
 from fastapi import FastAPI, Depends, HTTPException, Security, status, Header
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.security import APIKeyHeader
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
@@ -176,6 +176,7 @@ def peer_consensus(db: Session, market_id: int, agent_id: int):
 def agent_onboarding_guide():
     return {
         "workflow": "predict_before_consensus",
+        "skill_url": "/agent-skill.md",
         "credential": {
             "header": "X-Agent-Key",
             "returned_once": True,
@@ -256,6 +257,16 @@ def read_root():
 @app.get("/admin", response_class=HTMLResponse)
 def read_admin():
     with open(os.path.join(BASE_DIR, "static", "admin.html")) as f:
+        return f.read()
+
+
+@app.get(
+    "/agent-skill.md",
+    response_class=PlainTextResponse,
+    include_in_schema=False,
+)
+def read_agent_skill():
+    with open(os.path.join(BASE_DIR, "static", "agent-skill.md")) as f:
         return f.read()
 
 

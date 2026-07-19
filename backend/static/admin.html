@@ -9,21 +9,53 @@
       defer
       src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"
     ></script>
+    <style>
+      :root { color-scheme: dark; }
+      [x-cloak] { display: none !important; }
+      body {
+        min-height: 100vh;
+        background:
+          radial-gradient(circle at 10% 0%, rgba(34, 211, 238, 0.08), transparent 26rem),
+          radial-gradient(circle at 90% 0%, rgba(139, 92, 246, 0.08), transparent 28rem),
+          #070a10;
+      }
+      body::before {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        content: "";
+        pointer-events: none;
+        opacity: 0.20;
+        background-image:
+          linear-gradient(rgba(148, 163, 184, 0.05) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(148, 163, 184, 0.05) 1px, transparent 1px);
+        background-size: 42px 42px;
+        mask-image: linear-gradient(to bottom, black, transparent 70%);
+      }
+      .app-shell { position: relative; z-index: 1; }
+      .glass-panel {
+        border: 1px solid rgba(71, 85, 105, 0.55);
+        background: linear-gradient(145deg, rgba(15, 23, 42, 0.84), rgba(8, 13, 24, 0.74));
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.26);
+        backdrop-filter: blur(18px);
+      }
+      ::selection { background: rgba(34, 211, 238, 0.28); }
+    </style>
   </head>
-  <body class="bg-gray-900 text-white font-sans antialiased">
+  <body class="text-slate-100 font-sans antialiased">
     <div
-      class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
+      class="app-shell max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8"
       x-data="adminApp()"
     >
       <header
-        class="mb-10 border-b border-gray-800 pb-6 flex justify-between items-center"
+        class="glass-panel mb-8 rounded-3xl p-6 flex flex-col gap-5 sm:flex-row sm:justify-between sm:items-center"
       >
         <div>
-          <h1 class="text-3xl font-bold text-red-500">
+          <h1 class="text-3xl font-semibold tracking-tight text-white">
             Marx: Admin Control Panel
           </h1>
-          <p class="text-gray-400 mt-2">
-            Manage Agents, Sync Markets, and Resolve Outcomes.
+          <p class="text-slate-400 mt-2">
+            Manage agents, synchronize markets, and resolve outcomes.
           </p>
         </div>
         <div class="flex items-center space-x-4">
@@ -35,24 +67,24 @@
                 autocomplete="off"
                 aria-label="Admin API key"
                 placeholder="Enter ADMIN_KEY"
-                class="bg-gray-800 border border-gray-700 rounded-l px-3 py-1 text-white text-sm focus:border-blue-500"
+                class="bg-slate-900 border border-slate-800 rounded-l px-3 py-1 text-white text-sm focus:border-blue-500"
               />
               <button
                 type="button"
                 @click="showAdminKey = !showAdminKey"
                 :aria-pressed="showAdminKey"
                 :aria-label="showAdminKey ? 'Hide admin key' : 'Show admin key'"
-                class="bg-gray-700 border border-l-0 border-gray-600 rounded-r px-3 py-1 text-sm hover:bg-gray-600"
+                class="bg-slate-800 border border-l-0 border-slate-700 rounded-r px-3 py-1 text-sm hover:bg-slate-700"
                 x-text="showAdminKey ? 'Hide' : 'Show'"
               ></button>
             </div>
-            <p class="mt-1 text-[11px] text-gray-500">
+            <p class="mt-1 text-[11px] text-slate-500">
               Used only in this tab and never saved.
             </p>
           </div>
           <a
             href="/"
-            class="text-sm bg-gray-800 px-4 py-2 rounded-lg border border-gray-700 hover:bg-gray-700"
+            class="text-sm bg-slate-900 px-4 py-2 rounded-lg border border-slate-800 hover:bg-slate-800"
             >Public View</a
           >
         </div>
@@ -88,10 +120,10 @@
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div
-          class="space-y-6 bg-gray-800 p-6 rounded-xl border border-gray-700"
+          class="glass-panel space-y-6 rounded-2xl p-6"
         >
           <h2
-            class="text-xl font-semibold text-gray-200 border-b border-gray-700 pb-2"
+            class="text-xl font-semibold text-slate-200 border-b border-slate-800 pb-2"
           >
             Trending Market Control
           </h2>
@@ -105,7 +137,7 @@
           <div class="mt-4 max-h-96 overflow-y-auto space-y-3">
             <template x-for="market in markets" :key="market.id">
               <div
-                class="bg-gray-900 p-3 rounded border border-gray-700 flex justify-between items-center text-sm"
+                class="bg-slate-950 p-3 rounded border border-slate-800 flex justify-between items-center text-sm"
               >
                 <span class="truncate w-2/3" x-text="market.question"></span>
                 <div class="flex space-x-2">
@@ -124,12 +156,12 @@
                 </div>
               </div>
             </template>
-            <p x-show="marketsLoading" class="text-sm text-gray-500 text-center py-4">
+            <p x-show="marketsLoading" class="text-sm text-slate-500 text-center py-4">
               Loading markets...
             </p>
             <p
               x-show="!marketsLoading && markets.length === 0"
-              class="text-sm text-gray-500 text-center py-4"
+              class="text-sm text-slate-500 text-center py-4"
             >
               No open markets. Use Sync Polymarket to load the top 25 markets by 24h volume.
             </p>
@@ -137,29 +169,29 @@
         </div>
 
         <div
-          class="space-y-6 bg-gray-800 p-6 rounded-xl border border-gray-700"
+          class="glass-panel space-y-6 rounded-2xl p-6"
         >
           <h2
-            class="text-xl font-semibold text-gray-200 border-b border-gray-700 pb-2"
+            class="text-xl font-semibold text-slate-200 border-b border-slate-800 pb-2"
           >
             Agent Roster
           </h2>
           <form
             @submit.prevent="createAgent"
-            class="space-y-4 bg-gray-900 p-4 rounded border border-gray-700"
+            class="space-y-4 bg-slate-950 p-4 rounded border border-slate-800"
           >
             <input
               x-model="newAgent.name"
               type="text"
               placeholder="Agent Name"
-              class="w-full bg-gray-800 border-gray-700 rounded px-3 py-2"
+              class="w-full bg-slate-900 border-slate-800 rounded px-3 py-2"
               required
             />
             <input
               x-model="newAgent.model"
               type="text"
               placeholder="LLM Model (e.g. gpt-4o, claude-3-5-sonnet-20240620)"
-              class="w-full bg-gray-800 border-gray-700 rounded px-3 py-2"
+              class="w-full bg-slate-900 border-slate-800 rounded px-3 py-2"
               required
             />
             <button
@@ -172,12 +204,12 @@
           <div class="mt-4 space-y-3">
             <template x-for="agent in agents" :key="agent.id">
               <div
-                class="bg-gray-900 p-3 rounded border border-gray-700 flex justify-between items-center"
+                class="bg-slate-950 p-3 rounded border border-slate-800 flex justify-between items-center"
               >
                 <div>
                   <span class="font-bold" x-text="agent.name"></span>
                   <span
-                    class="text-xs text-gray-500 ml-2"
+                    class="text-xs text-slate-500 ml-2"
                     x-text="agent.model"
                   ></span>
                 </div>
@@ -188,19 +220,19 @@
                   ></span>
                   <button
                     @click="rotateKey(agent.id, agent.name)"
-                    class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded"
+                    class="text-xs bg-slate-800 hover:bg-slate-700 px-2 py-1 rounded"
                   >
                     Rotate key
                   </button>
                 </div>
               </div>
             </template>
-            <p x-show="agentsLoading" class="text-sm text-gray-500 text-center py-4">
+            <p x-show="agentsLoading" class="text-sm text-slate-500 text-center py-4">
               Loading agents...
             </p>
             <p
               x-show="!agentsLoading && agents.length === 0"
-              class="text-sm text-gray-500 text-center py-4"
+              class="text-sm text-slate-500 text-center py-4"
             >
               No agents deployed yet. Create an agent above.
             </p>
