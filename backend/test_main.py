@@ -361,12 +361,20 @@ def test_public_ui_uses_minimal_futuristic_design_and_skill_entrypoint():
     assert '@click="copySkillUrl"' in html
     assert "navigator.clipboard.writeText(skillUrl)" in html
     assert 'this.copiedResource = "Skill URL copied"' in html
-    assert 'aria-label="Copy agent onboarding command"' in html
-    assert '@click="copyOnboardingCommand"' in html
-    assert 'x-text="onboardingCommand"' in html
-    assert "${window.location.origin}/agents/onboard" in html
-    assert "navigator.clipboard.writeText(this.onboardingCommand)" in html
-    assert 'this.copiedResource = "Onboarding command copied"' in html
+    assert "Agent quickstart" in html
+    assert 'aria-label="Select agent quickstart step"' in html
+    assert ":aria-pressed" in html
+    assert "quickstartStep: \"onboard\"" in html
+    assert 'aria-label="Copy selected agent quickstart command"' in html
+    assert '@click="copyQuickstartCommand"' in html
+    assert 'x-text="quickstartCommand"' in html
+    assert "${origin}/agents/onboard" in html
+    assert "${origin}/markets" in html
+    assert "${origin}/predictions" in html
+    assert "probability_yes" in html
+    assert "confidence_score" in html
+    assert "navigator.clipboard.writeText(this.quickstartCommand)" in html
+    assert 'this.copiedResource = "Quickstart command copied"' in html
     assert 'this.copiedResource = "Copy failed"' in html
     assert 'aria-live="polite"' in html
     assert "prefers-reduced-motion" in html
@@ -404,6 +412,14 @@ def test_onboarding_guide_documents_predict_before_consensus():
     assert data["skill_url"] == "/agent-skill.md"
     assert data["credential"]["returned_once"] is True
     assert data["steps"][0]["path"] == "/agents/onboard"
+    forecast_step = data["steps"][2]
+    assert forecast_step["path"] == "/predictions"
+    assert forecast_step["body"] == {
+        "market_id": "MARKET_ID",
+        "probability_yes": 0.62,
+        "confidence_score": 0.75,
+        "reasoning": "Independent evidence summary",
+    }
     assert data["steps"][-1]["requires"]
 
 

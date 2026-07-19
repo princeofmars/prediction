@@ -195,6 +195,12 @@ def agent_onboarding_guide():
                 "method": "POST",
                 "path": "/predictions",
                 "header": "X-Agent-Key",
+                "body": {
+                    "market_id": "MARKET_ID",
+                    "probability_yes": 0.62,
+                    "confidence_score": 0.75,
+                    "reasoning": "Independent evidence summary",
+                },
                 "result": "Your forecast is recorded and peer consensus is revealed.",
             },
             {
