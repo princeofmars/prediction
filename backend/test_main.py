@@ -197,6 +197,20 @@ def test_public_page_has_manual_data_refresh():
     assert "this.lastUpdated = new Date().toLocaleTimeString" in html
 
 
+def test_public_page_supports_opt_in_auto_refresh():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert 'aria-label="Automatically refresh data every 60 seconds"' in html
+    assert 'x-model="autoRefreshEnabled"' in html
+    assert '@change="toggleAutoRefresh"' in html
+    assert "autoRefreshEnabled: false" in html
+    assert "toggleAutoRefresh()" in html
+    assert "setInterval(" in html
+    assert "60 * 1000" in html
+    assert "clearInterval(this.autoRefreshTimer)" in html
+
+
 def test_admin_page_has_loading_empty_and_error_states():
     response = client.get("/admin")
     assert response.status_code == 200

@@ -107,6 +107,18 @@
                   x-text="'Favorites only (' + favoriteMarketIds.length + ')'"
                 ></span>
               </label>
+              <label
+                class="flex items-center gap-2 text-xs text-gray-300 cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  x-model="autoRefreshEnabled"
+                  @change="toggleAutoRefresh"
+                  aria-label="Automatically refresh data every 60 seconds"
+                  class="rounded border-gray-600 bg-gray-900 text-blue-500"
+                />
+                <span>Auto-refresh every 60s</span>
+              </label>
               <button
                 type="button"
                 x-show="searchQuery || sortMode !== 'trending' || showFavoritesOnly"
@@ -351,6 +363,8 @@
           refreshing: false,
           lastUpdated: "",
           healthStatus: "Checking...",
+          autoRefreshEnabled: false,
+          autoRefreshTimer: null,
           get filteredMarkets() {
             const query = this.searchQuery.trim().toLowerCase();
             const favoriteFiltered = this.showFavoritesOnly
@@ -441,6 +455,18 @@
           init() {
             this.loadFavorites();
             this.refreshData();
+          },
+          toggleAutoRefresh() {
+            if (this.autoRefreshTimer) {
+              clearInterval(this.autoRefreshTimer);
+              this.autoRefreshTimer = null;
+            }
+            if (this.autoRefreshEnabled) {
+              this.autoRefreshTimer = setInterval(
+                () => this.refreshData(),
+                60 * 1000,
+              );
+            }
           },
           async refreshData() {
             if (this.refreshing) return;
