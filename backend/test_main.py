@@ -111,6 +111,22 @@ def test_public_page_labels_trending_markets():
     assert "Trending Markets (24h volume)" in response.text
 
 
+def test_public_page_shows_market_sync_status():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert 'aria-label="Market synchronization status"' in html
+    assert 'role="status"' in html
+    assert 'marketSyncStatus: "Checking"' in html
+    assert 'response.headers.get("X-Market-Sync")' in html
+    assert 'refreshed: "Fresh"' in html
+    assert 'recent: "Current"' in html
+    assert '"in-progress": "Refreshing"' in html
+    assert 'unavailable: "Cached"' in html
+    assert 'this.marketSyncStatus = "Unavailable"' in html
+    assert ':class="marketSyncTone"' in html
+
+
 def test_public_page_has_trending_market_search():
     response = client.get("/")
     assert response.status_code == 200

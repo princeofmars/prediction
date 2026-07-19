@@ -197,11 +197,24 @@
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <!-- Left Column: Markets -->
         <div id="markets" class="lg:col-span-2 space-y-6 scroll-mt-6">
-          <h2
-            class="text-xl font-semibold text-slate-200 border-b border-slate-800 pb-2"
-          >
-            Trending Markets (24h volume)
-          </h2>
+          <div class="flex flex-col gap-2 border-b border-slate-800 pb-2 sm:flex-row sm:items-center sm:justify-between">
+            <h2 class="text-xl font-semibold text-slate-200">
+              Trending Markets (24h volume)
+            </h2>
+            <span
+              role="status"
+              aria-live="polite"
+              aria-label="Market synchronization status"
+              class="inline-flex w-fit items-center gap-2 rounded-full border border-slate-800 bg-slate-950/70 px-3 py-1 text-xs text-slate-400"
+            >
+              <span
+                aria-hidden="true"
+                class="h-1.5 w-1.5 rounded-full"
+                :class="marketSyncTone"
+              ></span>
+              <span x-text="'Market data: ' + marketSyncStatus"></span>
+            </span>
+          </div>
 
           <div class="glass-panel rounded-2xl p-4 sm:p-5 space-y-3">
             <label for="market-search" class="text-sm font-medium text-slate-200">
@@ -501,6 +514,7 @@
           refreshing: false,
           lastUpdated: "",
           healthStatus: "Checking...",
+          marketSyncStatus: "Checking",
           copiedResource: "",
           quickstartStep: "onboard",
           autoRefreshEnabled: false,
@@ -510,6 +524,17 @@
           marketsLoadFailed: false,
           leaderboardLoading: true,
           leaderboardLoadFailed: false,
+          get marketSyncTone() {
+            const tones = {
+              Fresh: "bg-emerald-400",
+              Current: "bg-cyan-400",
+              Refreshing: "bg-violet-400",
+              Cached: "bg-amber-400",
+              "Auto-sync off": "bg-slate-500",
+              Unavailable: "bg-red-400",
+            };
+            return tones[this.marketSyncStatus] || "bg-slate-500";
+          },
           get quickstartCommand() {
             const origin = window.location.origin;
             if (this.quickstartStep === "markets") {
@@ -685,17 +710,31 @@
               return false;
             }
           },
+          updateMarketSyncStatus(response) {
+            const states = {
+              refreshed: "Fresh",
+              recent: "Current",
+              "in-progress": "Refreshing",
+              unavailable: "Cached",
+              disabled: "Auto-sync off",
+            };
+            const state = response.headers.get("X-Market-Sync");
+            this.marketSyncStatus = states[state] || "Loaded";
+          },
           async fetchMarkets() {
             this.marketsLoading = true;
             this.marketsLoadFailed = false;
+            this.marketSyncStatus = "Checking";
             try {
               const res = await fetch("/markets");
               if (!res.ok)
                 throw new Error(`Markets request failed: ${res.status}`);
+              this.updateMarketSyncStatus(res);
               const markets = await res.json();
               this.markets = markets;
               return true;
             } catch (e) {
+              this.marketSyncStatus = "Unavailable";
               this.marketsLoadFailed = true;
               this.dataErrors.push("Trending markets could not be loaded.");
               console.error("Failed to fetch markets", e);
