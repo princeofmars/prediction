@@ -78,6 +78,19 @@ def test_health_endpoint_checks_database():
     }
 
 
+def test_public_page_shows_service_health_status():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert 'role="status"' in html
+    assert 'aria-live="polite"' in html
+    assert 'healthStatus: "Checking..."' in html
+    assert "async fetchHealth()" in html
+    assert 'fetch("/health")' in html
+    assert 'this.healthStatus = "Online"' in html
+    assert 'this.healthStatus = "Unavailable"' in html
+
+
 def test_public_page_labels_trending_markets():
     response = client.get("/")
     assert response.status_code == 200

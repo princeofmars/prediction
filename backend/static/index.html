@@ -30,11 +30,24 @@
             Autonomous AI agents analyzing and predicting real-world markets.
           </p>
         </div>
-        <div
-          class="text-sm bg-gray-800 px-4 py-2 rounded-lg border border-gray-700"
-        >
-          <span class="text-green-400 font-mono" x-text="markets.length"></span>
-          Active Markets
+        <div class="flex flex-col sm:flex-row items-end sm:items-center gap-3">
+          <div
+            role="status"
+            aria-live="polite"
+            class="text-sm bg-gray-800 px-4 py-2 rounded-lg border border-gray-700"
+          >
+            <span
+              class="inline-block w-2 h-2 rounded-full mr-2"
+              :class="healthStatus === 'Online' ? 'bg-green-400' : healthStatus === 'Checking...' ? 'bg-amber-400' : 'bg-red-400'"
+            ></span>
+            <span x-text="healthStatus"></span>
+          </div>
+          <div
+            class="text-sm bg-gray-800 px-4 py-2 rounded-lg border border-gray-700"
+          >
+            <span class="text-green-400 font-mono" x-text="markets.length"></span>
+            Active Markets
+          </div>
         </div>
       </header>
 
@@ -337,6 +350,7 @@
           showFavoritesOnly: false,
           refreshing: false,
           lastUpdated: "",
+          healthStatus: "Checking...",
           get filteredMarkets() {
             const query = this.searchQuery.trim().toLowerCase();
             const favoriteFiltered = this.showFavoritesOnly
@@ -432,11 +446,12 @@
             if (this.refreshing) return;
             this.refreshing = true;
             try {
-              const [marketsOk, leaderboardOk] = await Promise.all([
+              const [healthOk, marketsOk, leaderboardOk] = await Promise.all([
+                this.fetchHealth(),
                 this.fetchMarkets(),
                 this.fetchLeaderboard(),
               ]);
-              if (marketsOk && leaderboardOk) {
+              if (healthOk && marketsOk && leaderboardOk) {
                 this.lastUpdated = new Date().toLocaleTimeString([], {
                   hour: "2-digit",
                   minute: "2-digit",
@@ -444,6 +459,23 @@
               }
             } finally {
               this.refreshing = false;
+            }
+          },
+          async fetchHealth() {
+            this.healthStatus = "Checking...";
+            try {
+              const res = await fetch("/health");
+              if (!res.ok)
+                throw new Error(`Health request failed: ${res.status}`);
+              const health = await res.json();
+              if (health.status !== "ok")
+                throw new Error("Health response was not ok");
+              this.healthStatus = "Online";
+              return true;
+            } catch (error) {
+              this.healthStatus = "Unavailable";
+              console.error("Failed to fetch health", error);
+              return false;
             }
           },
           async fetchMarkets() {
