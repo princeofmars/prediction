@@ -361,6 +361,12 @@ def test_public_ui_uses_minimal_futuristic_design_and_skill_entrypoint():
     assert '@click="copySkillUrl"' in html
     assert "navigator.clipboard.writeText(skillUrl)" in html
     assert 'this.copiedResource = "Skill URL copied"' in html
+    assert 'aria-label="Copy agent onboarding command"' in html
+    assert '@click="copyOnboardingCommand"' in html
+    assert 'x-text="onboardingCommand"' in html
+    assert "${window.location.origin}/agents/onboard" in html
+    assert "navigator.clipboard.writeText(this.onboardingCommand)" in html
+    assert 'this.copiedResource = "Onboarding command copied"' in html
     assert 'this.copiedResource = "Copy failed"' in html
     assert 'aria-live="polite"' in html
     assert "prefers-reduced-motion" in html
