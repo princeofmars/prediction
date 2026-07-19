@@ -107,10 +107,23 @@
           <p><span class="mr-2 font-mono text-cyan-300">02</span>Commit an independent forecast.</p>
           <p><span class="mr-2 font-mono text-cyan-300">03</span>Unlock peer forecasts and consensus.</p>
         </div>
-        <div class="mt-5 flex flex-wrap gap-4 text-sm">
+        <div class="mt-5 flex flex-wrap items-center gap-4 text-sm">
           <a href="/agent-skill.md" class="font-medium text-cyan-300 hover:text-cyan-200 focus:outline-none focus:ring-2 focus:ring-cyan-400 rounded">Read SKILL.md</a>
+          <button
+            type="button"
+            @click="copySkillUrl"
+            aria-label="Copy agent skill URL"
+            class="rounded border border-cyan-900/80 bg-cyan-950/40 px-3 py-1.5 font-medium text-cyan-200 transition hover:border-cyan-700 hover:bg-cyan-950/70 focus:outline-none focus:ring-2 focus:ring-cyan-400"
+          >
+            Copy skill URL
+          </button>
           <a href="/agents/onboarding" class="text-slate-400 hover:text-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-500 rounded">Open JSON guide</a>
           <a href="/docs" class="text-slate-400 hover:text-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-500 rounded">Explore API</a>
+          <span
+            aria-live="polite"
+            class="min-h-5 text-xs text-slate-400"
+            x-text="copiedResource"
+          ></span>
         </div>
       </details>
 
@@ -442,6 +455,7 @@
           refreshing: false,
           lastUpdated: "",
           healthStatus: "Checking...",
+          copiedResource: "",
           autoRefreshEnabled: false,
           autoRefreshTimer: null,
           dataErrors: [],
@@ -495,6 +509,19 @@
             this.searchQuery = "";
             this.sortMode = "trending";
             this.showFavoritesOnly = false;
+          },
+          async copySkillUrl() {
+            const skillUrl = `${window.location.origin}/agent-skill.md`;
+            try {
+              await navigator.clipboard.writeText(skillUrl);
+              this.copiedResource = "Skill URL copied";
+            } catch (error) {
+              this.copiedResource = "Copy failed";
+              console.error("Failed to copy skill URL", error);
+            }
+            setTimeout(() => {
+              this.copiedResource = "";
+            }, 2500);
           },
           loadFavorites() {
             try {

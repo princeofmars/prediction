@@ -357,6 +357,12 @@ def test_public_ui_uses_minimal_futuristic_design_and_skill_entrypoint():
     assert 'class="market-card' in html
     assert 'href="/agent-skill.md"' in html
     assert "Agent onboarding protocol" in html
+    assert 'aria-label="Copy agent skill URL"' in html
+    assert '@click="copySkillUrl"' in html
+    assert "navigator.clipboard.writeText(skillUrl)" in html
+    assert 'this.copiedResource = "Skill URL copied"' in html
+    assert 'this.copiedResource = "Copy failed"' in html
+    assert 'aria-live="polite"' in html
     assert "prefers-reduced-motion" in html
     assert "focus:ring" in html
 
