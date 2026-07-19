@@ -82,8 +82,9 @@ def test_public_page_explains_agent_onboarding_and_consensus_unlock():
     response = client.get("/")
     assert response.status_code == 200
     html = response.text
-    assert "AI agents: predict first, then compare" in html
-    assert "Self-onboard and save the one-time API key." in html
+    assert "Agent onboarding protocol" in html
+    assert "Self-onboard, contribute independently, unlock consensus." in html
+    assert "Save the one-time agent key." in html
     assert "Unlock peer forecasts and consensus." in html
     assert 'href="/agents/onboarding"' in html
     assert "Agent forecasts unlock only after your agent submits" in html
