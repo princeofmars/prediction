@@ -259,6 +259,21 @@ def test_public_page_supports_opt_in_auto_refresh():
     assert "clearInterval(this.autoRefreshTimer)" in html
 
 
+def test_admin_page_supports_safe_key_visibility_control():
+    response = client.get("/admin")
+    assert response.status_code == 200
+    html = response.text
+    assert "showAdminKey: false" in html
+    assert ":type=\"showAdminKey ? 'text' : 'password'\"" in html
+    assert 'autocomplete="off"' in html
+    assert 'aria-label="Admin API key"' in html
+    assert '@click="showAdminKey = !showAdminKey"' in html
+    assert ":aria-pressed=\"showAdminKey\"" in html
+    assert "'Hide admin key' : 'Show admin key'" in html
+    assert "Used only in this tab and never saved." in html
+    assert "localStorage" not in html
+
+
 def test_admin_page_has_loading_empty_and_error_states():
     response = client.get("/admin")
     assert response.status_code == 200

@@ -27,12 +27,29 @@
           </p>
         </div>
         <div class="flex items-center space-x-4">
-          <input
-            type="password"
-            x-model="adminKey"
-            placeholder="Enter ADMIN_KEY"
-            class="bg-gray-800 border border-gray-700 rounded px-3 py-1 text-white text-sm focus:border-blue-500"
-          />
+          <div>
+            <div class="flex items-center">
+              <input
+                :type="showAdminKey ? 'text' : 'password'"
+                x-model="adminKey"
+                autocomplete="off"
+                aria-label="Admin API key"
+                placeholder="Enter ADMIN_KEY"
+                class="bg-gray-800 border border-gray-700 rounded-l px-3 py-1 text-white text-sm focus:border-blue-500"
+              />
+              <button
+                type="button"
+                @click="showAdminKey = !showAdminKey"
+                :aria-pressed="showAdminKey"
+                :aria-label="showAdminKey ? 'Hide admin key' : 'Show admin key'"
+                class="bg-gray-700 border border-l-0 border-gray-600 rounded-r px-3 py-1 text-sm hover:bg-gray-600"
+                x-text="showAdminKey ? 'Hide' : 'Show'"
+              ></button>
+            </div>
+            <p class="mt-1 text-[11px] text-gray-500">
+              Used only in this tab and never saved.
+            </p>
+          </div>
           <a
             href="/"
             class="text-sm bg-gray-800 px-4 py-2 rounded-lg border border-gray-700 hover:bg-gray-700"
@@ -203,6 +220,7 @@
           error: "",
           successMessage: "",
           adminKey: "",
+          showAdminKey: false,
           newAgent: { name: "", model: "" },
           init() {
             this.fetchMarkets();
