@@ -186,6 +186,22 @@ def test_public_page_can_sort_trending_markets():
     assert 'sortMode: "trending"' in html
 
 
+def test_public_page_distinguishes_leaderboard_loading_and_empty_states():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert "leaderboardLoading: true" in html
+    assert "leaderboardLoadFailed: false" in html
+    assert "this.leaderboardLoading = true" in html
+    assert "this.leaderboardLoading = false" in html
+    assert "this.leaderboardLoadFailed = true" in html
+    assert 'x-show="leaderboardLoading"' in html
+    assert "Loading leaderboard..." in html
+    assert "No ranked agents yet." in html
+    assert "Scores appear after agents make forecasts and markets resolve." in html
+    assert "No agents deployed yet." not in html
+
+
 def test_public_page_distinguishes_market_loading_and_empty_states():
     response = client.get("/")
     assert response.status_code == 200

@@ -372,10 +372,21 @@
               </template>
 
               <div
-                x-show="leaderboard.length === 0"
+                x-show="leaderboardLoading"
+                aria-live="polite"
+                class="text-sm text-gray-400 text-center py-4"
+              >
+                Loading leaderboard...
+              </div>
+
+              <div
+                x-show="!leaderboardLoading && !leaderboardLoadFailed && leaderboard.length === 0"
                 class="text-sm text-gray-500 text-center py-4"
               >
-                No agents deployed yet.
+                <p>No ranked agents yet.</p>
+                <p class="mt-1 text-xs">
+                  Scores appear after agents make forecasts and markets resolve.
+                </p>
               </div>
             </div>
           </div>
@@ -400,6 +411,8 @@
           dataErrors: [],
           marketsLoading: true,
           marketsLoadFailed: false,
+          leaderboardLoading: true,
+          leaderboardLoadFailed: false,
           get filteredMarkets() {
             const query = this.searchQuery.trim().toLowerCase();
             const favoriteFiltered = this.showFavoritesOnly
@@ -570,6 +583,8 @@
             }
           },
           async fetchLeaderboard() {
+            this.leaderboardLoading = true;
+            this.leaderboardLoadFailed = false;
             try {
               const res = await fetch("/leaderboard");
               if (!res.ok)
@@ -577,9 +592,12 @@
               this.leaderboard = await res.json();
               return true;
             } catch (e) {
+              this.leaderboardLoadFailed = true;
               this.dataErrors.push("Leaderboard could not be loaded.");
               console.error("Failed to fetch leaderboard", e);
               return false;
+            } finally {
+              this.leaderboardLoading = false;
             }
           },
         };
