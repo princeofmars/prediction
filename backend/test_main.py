@@ -137,6 +137,21 @@ def test_public_page_has_trending_market_search():
     assert "get filteredMarkets()" in html
 
 
+
+def test_public_page_filters_markets_by_probability():
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert 'aria-label="Filter trending markets by probability"' in response.text
+    assert 'probabilityFilter: "all"' in response.text
+    assert '<option value="toss-up">Toss-up (40% to 60% YES)</option>' in response.text
+    assert '<option value="yes">Leaning YES (above 60%)</option>' in response.text
+    assert '<option value="no">Leaning NO (below 40%)</option>' in response.text
+    assert 'this.probabilityFilter === "toss-up"' in response.text
+    assert "probability >= 0.4 && probability <= 0.6" in response.text
+    assert 'this.probabilityFilter = "all";' in response.text
+    assert "probabilityFilter !== 'all'" in response.text
+
 def test_market_can_prepare_forecast_quickstart():
     response = client.get("/")
     assert response.status_code == 200

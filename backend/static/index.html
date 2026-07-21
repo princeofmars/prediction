@@ -220,7 +220,7 @@
             <label for="market-search" class="text-sm font-medium text-slate-200">
               Search trending markets
             </label>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <input
                 id="market-search"
                 type="search"
@@ -238,6 +238,16 @@
                 <option value="probability-desc">Highest YES probability</option>
                 <option value="probability-asc">Lowest YES probability</option>
                 <option value="closing-soon">Closing soon</option>
+              </select>
+              <select
+                x-model="probabilityFilter"
+                aria-label="Filter trending markets by probability"
+                class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+              >
+                <option value="all">All probabilities</option>
+                <option value="toss-up">Toss-up (40% to 60% YES)</option>
+                <option value="yes">Leaning YES (above 60%)</option>
+                <option value="no">Leaning NO (below 40%)</option>
               </select>
             </div>
             <div class="flex flex-wrap items-center justify-between gap-3">
@@ -277,7 +287,7 @@
               </label>
               <button
                 type="button"
-                x-show="searchQuery || sortMode !== 'trending' || showFavoritesOnly"
+                x-show="searchQuery || sortMode !== 'trending' || probabilityFilter !== 'all' || showFavoritesOnly"
                 @click="resetMarketView"
                 aria-label="Reset market search, sorting, and favorite filter"
                 class="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-lg"
@@ -519,6 +529,7 @@
           leaderboard: [],
           searchQuery: "",
           sortMode: "trending",
+          probabilityFilter: "all",
           favoriteMarketIds: [],
           showFavoritesOnly: false,
           refreshing: false,
@@ -562,7 +573,7 @@
             const favoriteFiltered = this.showFavoritesOnly
               ? this.markets.filter((market) => this.isFavorite(market.id))
               : this.markets;
-            const filtered = query
+            const searchFiltered = query
               ? favoriteFiltered.filter((market) =>
                   [market.question, market.description]
                     .filter(Boolean)
@@ -571,6 +582,25 @@
                     .includes(query),
                 )
               : favoriteFiltered;
+            const filtered =
+              this.probabilityFilter === "all"
+                ? searchFiltered
+                : searchFiltered.filter((market) => {
+                    const probability = market.market_probability;
+                    if (probability === null || probability === undefined) {
+                      return false;
+                    }
+                    if (this.probabilityFilter === "toss-up") {
+                      return probability >= 0.4 && probability <= 0.6;
+                    }
+                    if (this.probabilityFilter === "yes") {
+                      return probability > 0.6;
+                    }
+                    if (this.probabilityFilter === "no") {
+                      return probability < 0.4;
+                    }
+                    return true;
+                  });
 
             if (this.sortMode === "probability-desc") {
               return [...filtered].sort(
@@ -620,6 +650,7 @@
           resetMarketView() {
             this.searchQuery = "";
             this.sortMode = "trending";
+            this.probabilityFilter = "all";
             this.showFavoritesOnly = false;
           },
           async copySkillUrl() {
