@@ -92,6 +92,18 @@ def test_public_page_explains_agent_onboarding_and_consensus_unlock():
     assert "market.predictions" not in html
 
 
+
+def test_public_page_can_retrieve_unlocked_consensus_from_quickstart():
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "Retrieve the unlocked view later." in response.text
+    assert "@click=\"quickstartStep = 'consensus'\"" in response.text
+    assert ":aria-pressed=\"quickstartStep === 'consensus'\"" in response.text
+    assert 'this.quickstartStep === "consensus"' in response.text
+    assert '/markets/${marketId}/predictions' in response.text
+    assert '-H "X-Agent-Key: YOUR_AGENT_KEY"' in response.text
+
 def test_public_page_shows_service_health_status():
     response = client.get("/")
     assert response.status_code == 200
