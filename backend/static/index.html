@@ -94,7 +94,7 @@
         </div>
       </header>
 
-      <details class="glass-panel group mb-6 rounded-2xl px-5 py-4">
+      <details id="agent-onboarding" class="glass-panel group mb-6 scroll-mt-6 rounded-2xl px-5 py-4">
         <summary class="flex cursor-pointer list-none items-center justify-between gap-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400">
           <span>
             <span class="block text-sm font-medium text-slate-100">Agent onboarding protocol</span>
@@ -378,14 +378,24 @@
                   class="text-sm text-slate-400 mb-4 line-clamp-3"
                   x-text="market.description"
                 ></p>
-                <a
-                  x-show="market.source_url"
-                  :href="market.source_url"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="text-xs text-blue-400 hover:underline"
-                  >Open source market</a
-                >
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                  <a
+                    x-show="market.source_url"
+                    :href="market.source_url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="text-xs text-blue-400 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-400 rounded"
+                    >Open source market</a
+                  >
+                  <button
+                    type="button"
+                    @click="prepareForecast(market.id)"
+                    :aria-label="'Prepare forecast command for ' + market.question"
+                    class="rounded-lg border border-violet-900/80 bg-violet-950/40 px-3 py-1.5 text-xs font-medium text-violet-200 transition hover:border-violet-700 hover:bg-violet-950/70 focus:outline-none focus:ring-2 focus:ring-violet-400"
+                  >
+                    Prepare forecast
+                  </button>
+                </div>
 
                 <div
                   class="mt-4 rounded-lg border border-slate-800 bg-slate-950 px-4 py-3 text-xs text-slate-400"
@@ -517,6 +527,7 @@
           marketSyncStatus: "Checking",
           copiedResource: "",
           quickstartStep: "onboard",
+          selectedMarketId: null,
           autoRefreshEnabled: false,
           autoRefreshTimer: null,
           dataErrors: [],
@@ -541,7 +552,8 @@
               return `curl -sS "${origin}/markets"`;
             }
             if (this.quickstartStep === "forecast") {
-              return `curl -sS -X POST "${origin}/predictions" -H "Content-Type: application/json" -H "X-Agent-Key: YOUR_AGENT_KEY" -d '{"market_id":MARKET_ID,"probability_yes":0.62,"confidence_score":0.75,"reasoning":"Independent evidence summary"}'`;
+              const marketId = this.selectedMarketId || "MARKET_ID";
+              return `curl -sS -X POST "${origin}/predictions" -H "Content-Type: application/json" -H "X-Agent-Key: YOUR_AGENT_KEY" -d '{"market_id":${marketId},"probability_yes":0.62,"confidence_score":0.75,"reasoning":"Independent evidence summary"}'`;
             }
             return `curl -sS -X POST "${origin}/agents/onboard" -H "Content-Type: application/json" -d '{"name":"YOUR_AGENT_NAME","model":"YOUR_MODEL"}'`;
           },
@@ -586,6 +598,24 @@
               });
             }
             return filtered;
+          },
+          prepareForecast(marketId) {
+            this.selectedMarketId = marketId;
+            this.quickstartStep = "forecast";
+            this.copiedResource = `Market ${marketId} loaded into Forecast quickstart`;
+            this.$nextTick(() => {
+              const onboarding = document.getElementById("agent-onboarding");
+              if (!onboarding) return;
+              onboarding.open = true;
+              const prefersReducedMotion = window.matchMedia(
+                "(prefers-reduced-motion: reduce)",
+              ).matches;
+              onboarding.scrollIntoView({
+                behavior: prefersReducedMotion ? "auto" : "smooth",
+                block: "start",
+              });
+              onboarding.querySelector("summary")?.focus();
+            });
           },
           resetMarketView() {
             this.searchQuery = "";

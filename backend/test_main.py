@@ -137,6 +137,24 @@ def test_public_page_has_trending_market_search():
     assert "get filteredMarkets()" in html
 
 
+def test_market_can_prepare_forecast_quickstart():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert 'id="agent-onboarding"' in html
+    assert "selectedMarketId: null" in html
+    assert '@click="prepareForecast(market.id)"' in html
+    assert ":aria-label="'Prepare forecast command for ' + market.question"" in html
+    assert "prepareForecast(marketId)" in html
+    assert 'this.quickstartStep = "forecast"' in html
+    assert "this.selectedMarketId = marketId" in html
+    assert 'document.getElementById("agent-onboarding")' in html
+    assert 'onboarding.querySelector("summary")?.focus()' in html
+    assert '"(prefers-reduced-motion: reduce)"' in html
+    assert 'const marketId = this.selectedMarketId || "MARKET_ID"' in html
+    assert '"market_id":${marketId}' in html
+
+
 def test_public_leaderboard_explains_forecast_score():
     response = client.get("/")
     assert response.status_code == 200
