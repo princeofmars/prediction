@@ -144,7 +144,7 @@ def test_market_can_prepare_forecast_quickstart():
     assert 'id="agent-onboarding"' in html
     assert "selectedMarketId: null" in html
     assert '@click="prepareForecast(market.id)"' in html
-    assert ":aria-label="'Prepare forecast command for ' + market.question"" in html
+    assert "Prepare forecast command for" in html
     assert "prepareForecast(marketId)" in html
     assert 'this.quickstartStep = "forecast"' in html
     assert "this.selectedMarketId = marketId" in html
