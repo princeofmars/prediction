@@ -152,6 +152,21 @@ def test_public_page_filters_markets_by_probability():
     assert 'this.probabilityFilter = "all";' in response.text
     assert "probabilityFilter !== 'all'" in response.text
 
+
+def test_public_page_supports_keyboard_first_market_search():
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert '@keydown.window="handleSearchShortcut($event)"' in response.text
+    assert "<kbd" in response.text
+    assert "to search" in response.text
+    assert "handleSearchShortcut(event)" in response.text
+    assert 'event.key === "/"' in response.text
+    assert 'event.key === "Escape"' in response.text
+    assert 'document.getElementById("market-search")?.focus()' in response.text
+    assert "document.activeElement.blur()" in response.text
+    assert "Reset market search, probability, sorting, and favorite filters" in response.text
+
 def test_market_can_prepare_forecast_quickstart():
     response = client.get("/")
     assert response.status_code == 200
