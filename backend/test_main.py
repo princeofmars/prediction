@@ -167,6 +167,22 @@ def test_public_page_supports_keyboard_first_market_search():
     assert "document.activeElement.blur()" in response.text
     assert "Reset market search, probability, sorting, and favorite filters" in response.text
 
+
+def test_public_page_shows_individually_clearable_active_filters():
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert 'aria-label="Active market filters"' in response.text
+    assert ">Active filters</span>" in response.text
+    assert ":aria-label="'Clear search filter: ' + searchQuery"" in response.text
+    assert '@click="searchQuery = \'\'"' in response.text
+    assert 'aria-label="Clear probability filter"' in response.text
+    assert '@click="probabilityFilter = \'all\'"' in response.text
+    assert 'aria-label="Clear market sorting"' in response.text
+    assert '@click="sortMode = \'trending\'"' in response.text
+    assert 'aria-label="Clear favorites-only filter"' in response.text
+    assert '@click="showFavoritesOnly = false"' in response.text
+
 def test_market_can_prepare_forecast_quickstart():
     response = client.get("/")
     assert response.status_code == 200

@@ -315,6 +315,59 @@
                 <span x-text="refreshing ? 'Refreshing...' : 'Refresh data'"></span>
               </button>
             </div>
+            <div
+              x-cloak
+              x-show="searchQuery || sortMode !== 'trending' || probabilityFilter !== 'all' || showFavoritesOnly"
+              role="region"
+              aria-label="Active market filters"
+              class="flex flex-wrap items-center gap-2 border-t border-slate-800 pt-3"
+            >
+              <span class="text-xs font-medium text-slate-500">Active filters</span>
+              <button
+                type="button"
+                x-show="searchQuery"
+                @click="searchQuery = ''"
+                :aria-label="'Clear search filter: ' + searchQuery"
+                class="inline-flex max-w-full items-center gap-1.5 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2.5 py-1 text-xs text-cyan-200 transition hover:border-cyan-400/40 hover:bg-cyan-400/15 focus:outline-none focus:ring-2 focus:ring-cyan-400/40"
+              >
+                <span class="max-w-48 truncate" x-text="'Search: ' + searchQuery"></span>
+                <span aria-hidden="true">&times;</span>
+              </button>
+              <button
+                type="button"
+                x-show="probabilityFilter !== 'all'"
+                @click="probabilityFilter = 'all'"
+                aria-label="Clear probability filter"
+                class="inline-flex items-center gap-1.5 rounded-full border border-violet-400/20 bg-violet-400/10 px-2.5 py-1 text-xs text-violet-200 transition hover:border-violet-400/40 hover:bg-violet-400/15 focus:outline-none focus:ring-2 focus:ring-violet-400/40"
+              >
+                <span
+                  x-text="probabilityFilter === 'toss-up' ? 'Toss-up' : probabilityFilter === 'yes' ? 'Leaning YES' : 'Leaning NO'"
+                ></span>
+                <span aria-hidden="true">&times;</span>
+              </button>
+              <button
+                type="button"
+                x-show="sortMode !== 'trending'"
+                @click="sortMode = 'trending'"
+                aria-label="Clear market sorting"
+                class="inline-flex items-center gap-1.5 rounded-full border border-blue-400/20 bg-blue-400/10 px-2.5 py-1 text-xs text-blue-200 transition hover:border-blue-400/40 hover:bg-blue-400/15 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
+              >
+                <span
+                  x-text="sortMode === 'probability-desc' ? 'Highest YES' : sortMode === 'probability-asc' ? 'Lowest YES' : 'Closing soon'"
+                ></span>
+                <span aria-hidden="true">&times;</span>
+              </button>
+              <button
+                type="button"
+                x-show="showFavoritesOnly"
+                @click="showFavoritesOnly = false"
+                aria-label="Clear favorites-only filter"
+                class="inline-flex items-center gap-1.5 rounded-full border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-xs text-amber-200 transition hover:border-amber-400/40 hover:bg-amber-400/15 focus:outline-none focus:ring-2 focus:ring-amber-400/40"
+              >
+                <span>Favorites only</span>
+                <span aria-hidden="true">&times;</span>
+              </button>
+            </div>
           </div>
 
           <div class="space-y-4">
