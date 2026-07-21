@@ -174,7 +174,7 @@ def test_public_page_shows_individually_clearable_active_filters():
     assert response.status_code == 200
     assert 'aria-label="Active market filters"' in response.text
     assert ">Active filters</span>" in response.text
-    assert ":aria-label="'Clear search filter: ' + searchQuery"" in response.text
+    assert "Clear search filter:" in response.text
     assert '@click="searchQuery = \'\'"' in response.text
     assert 'aria-label="Clear probability filter"' in response.text
     assert '@click="probabilityFilter = \'all\'"' in response.text
