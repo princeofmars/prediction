@@ -205,19 +205,37 @@
             <h2 class="text-xl font-semibold text-slate-200">
               Trending Markets (24h volume)
             </h2>
-            <span
-              role="status"
-              aria-live="polite"
-              aria-label="Market synchronization status"
-              class="inline-flex w-fit items-center gap-2 rounded-full border border-slate-800 bg-slate-950/70 px-3 py-1 text-xs text-slate-400"
-            >
-              <span
-                aria-hidden="true"
-                class="h-1.5 w-1.5 rounded-full"
-                :class="marketSyncTone"
-              ></span>
-              <span x-text="'Market data: ' + marketSyncStatus"></span>
-            </span>
+            <details class="group relative w-fit">
+              <summary
+                aria-label="Explain market synchronization status"
+                class="inline-flex cursor-pointer list-none items-center gap-2 rounded-full border border-slate-800 bg-slate-950/70 px-3 py-1 text-xs text-slate-400 transition hover:border-slate-700 hover:text-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-400/40"
+              >
+                <span
+                  role="status"
+                  aria-live="polite"
+                  aria-label="Market synchronization status"
+                  class="inline-flex items-center gap-2"
+                >
+                  <span
+                    aria-hidden="true"
+                    class="h-1.5 w-1.5 rounded-full"
+                    :class="marketSyncTone"
+                  ></span>
+                  <span x-text="'Market data: ' + marketSyncStatus"></span>
+                </span>
+                <span aria-hidden="true" class="text-slate-600 transition group-open:rotate-180">⌄</span>
+              </summary>
+              <div
+                role="note"
+                class="absolute right-0 z-20 mt-2 w-72 rounded-xl border border-slate-800 bg-slate-950/95 p-3 text-xs leading-5 text-slate-400 shadow-2xl backdrop-blur"
+              >
+                <p class="font-medium text-slate-200">Market data status</p>
+                <p class="mt-1" x-text="marketSyncDescription"></p>
+                <p class="mt-2 border-t border-slate-800 pt-2 text-slate-500">
+                  The feed contains up to 25 active Polymarket markets ranked by 24-hour volume.
+                </p>
+              </div>
+            </details>
           </div>
 
           <div class="glass-panel rounded-2xl p-4 sm:p-5 space-y-3">
@@ -620,6 +638,22 @@
               Unavailable: "bg-red-400",
             };
             return tones[this.marketSyncStatus] || "bg-slate-500";
+          },
+          get marketSyncDescription() {
+            const descriptions = {
+              Checking: "Checking the API and upstream market source.",
+              Fresh: "Polymarket data was refreshed during this request.",
+              Current: "A recent successful refresh is still current.",
+              Refreshing: "Another request is refreshing market data now.",
+              Cached: "The upstream refresh failed, so the latest cached markets are shown.",
+              "Auto-sync off": "Automatic synchronization is disabled in this environment.",
+              Unavailable: "Market data could not be loaded.",
+              Loaded: "Market data loaded without additional sync metadata.",
+            };
+            return (
+              descriptions[this.marketSyncStatus] ||
+              "Market data status is available after the feed loads."
+            );
           },
           get quickstartCommand() {
             const origin = window.location.origin;

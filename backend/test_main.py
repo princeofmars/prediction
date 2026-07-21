@@ -183,6 +183,19 @@ def test_public_page_shows_individually_clearable_active_filters():
     assert 'aria-label="Clear favorites-only filter"' in response.text
     assert '@click="showFavoritesOnly = false"' in response.text
 
+
+def test_public_page_explains_market_sync_statuses():
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert 'aria-label="Explain market synchronization status"' in response.text
+    assert 'aria-label="Market synchronization status"' in response.text
+    assert "Market data status" in response.text
+    assert "marketSyncDescription" in response.text
+    assert "Polymarket data was refreshed during this request." in response.text
+    assert "latest cached markets are shown." in response.text
+    assert "up to 25 active Polymarket markets ranked by 24-hour volume" in response.text
+
 def test_market_can_prepare_forecast_quickstart():
     response = client.get("/")
     assert response.status_code == 200
