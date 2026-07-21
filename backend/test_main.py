@@ -209,7 +209,10 @@ def test_public_page_can_reset_market_view():
     response = client.get("/")
     assert response.status_code == 200
     html = response.text
-    assert 'aria-label="Reset market search, sorting, and favorite filter"' in html
+    assert (
+        'aria-label="Reset market search, probability, sorting, and favorite filters"'
+        in html
+    )
     assert '@click="resetMarketView"' in html
     assert "resetMarketView()" in html
     assert 'this.searchQuery = ""' in html
