@@ -290,9 +290,25 @@ def test_market_cards_offer_responsive_expandable_context():
     assert "Show full context" in html
     assert "Show less" in html
     assert "sm:flex-row sm:justify-between sm:items-start" in html
-    assert "sm:grid-cols-2 sm:gap-3" in html
+    assert "sm:grid-cols-3 sm:gap-3" in html
     assert "sm:flex-none sm:py-1.5" in html
 
+
+
+
+def test_market_cards_show_sync_freshness_with_exact_timestamp():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert 'x-show="market.updated_at"' in html
+    assert ':datetime="market.updated_at"' in html
+    assert "Last synchronized " in html
+    assert "parseUtcTimestamp(value)" in html
+    assert "formatMarketFreshness(value)" in html
+    assert "formatMarketUpdatedTitle(value)" in html
+    assert "just now" in html
+    assert "time unavailable" in html
+    assert r"/(Z|[+-]\d{2}:\d{2})$/.test(timestamp)" in html
 
 
 def test_market_cards_show_accessible_trending_rank():

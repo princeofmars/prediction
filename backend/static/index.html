@@ -468,7 +468,7 @@
                   </div>
                 </div>
 
-                <div class="grid grid-cols-1 gap-2 text-xs text-slate-400 mb-4 sm:grid-cols-2 sm:gap-3">
+                <div class="grid grid-cols-1 gap-2 text-xs text-slate-400 mb-4 sm:grid-cols-3 sm:gap-3">
                   <div x-show="market.market_probability !== null">
                     Crowd YES:
                     <span
@@ -485,6 +485,15 @@
                       class="text-amber-300 font-medium"
                       x-text="' · ' + formatTimeRemaining(market.end_date)"
                     ></span>
+                  </div>
+                  <div x-show="market.updated_at">
+                    Synced:
+                    <time
+                      :datetime="market.updated_at"
+                      :title="'Last synchronized ' + formatMarketUpdatedTitle(market.updated_at)"
+                      class="font-medium text-emerald-300"
+                      x-text="formatMarketFreshness(market.updated_at)"
+                    ></time>
                   </div>
                 </div>
                 <div
@@ -996,6 +1005,38 @@
               ? this.favoriteMarketIds.filter((id) => id !== marketId)
               : [...this.favoriteMarketIds, marketId];
             this.persistFavorites();
+          },
+          parseUtcTimestamp(value) {
+            if (!value) return null;
+            const timestamp = String(value);
+            const normalized = /(Z|[+-]\d{2}:\d{2})$/.test(timestamp)
+              ? timestamp
+              : `${timestamp}Z`;
+            const parsed = new Date(normalized);
+            return Number.isFinite(parsed.getTime()) ? parsed : null;
+          },
+          formatMarketFreshness(value) {
+            const updatedAt = this.parseUtcTimestamp(value);
+            if (!updatedAt) return "time unavailable";
+            const seconds = Math.max(
+              0,
+              Math.floor((Date.now() - updatedAt.getTime()) / 1000),
+            );
+            if (seconds < 60) return "just now";
+            if (seconds < 60 * 60) return `${Math.floor(seconds / 60)}m ago`;
+            if (seconds < 24 * 60 * 60) {
+              return `${Math.floor(seconds / (60 * 60))}h ago`;
+            }
+            return `${Math.floor(seconds / (24 * 60 * 60))}d ago`;
+          },
+          formatMarketUpdatedTitle(value) {
+            const updatedAt = this.parseUtcTimestamp(value);
+            return updatedAt
+              ? updatedAt.toLocaleString([], {
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                })
+              : "time unavailable";
           },
           formatTimeRemaining(endDate) {
             if (!endDate) return "";
