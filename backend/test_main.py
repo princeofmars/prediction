@@ -290,7 +290,7 @@ def test_market_cards_offer_responsive_expandable_context():
     assert "Show less" in html
     assert "sm:flex-row sm:justify-between sm:items-start" in html
     assert "sm:grid-cols-2 sm:gap-3" in html
-    assert "sm:w-auto sm:py-1.5" in html
+    assert "sm:flex-none sm:py-1.5" in html
 
 
 def test_market_can_prepare_forecast_quickstart():
@@ -1150,6 +1150,6 @@ def test_alembic_upgrades_applied_bcrypt_release(tmp_path):
     ]
     connection.close()
 
-    assert {"source_market_id", "description", "market_probability"} <= market_columns
+    assert {"source_market_id", "description", "market_probability", "trend_rank"} <= market_columns
     assert preserved_hash == bcrypt_hash
-    assert version == "8c63c4e1a4f2"
+    assert version == "5e14b6c7d8f9"
