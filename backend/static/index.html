@@ -409,7 +409,7 @@
               <div
                 class="market-card rounded-2xl border border-slate-800 p-5"
               >
-                <div class="flex justify-between items-start mb-4">
+                <div class="flex flex-col gap-3 mb-4 sm:flex-row sm:justify-between sm:items-start">
                   <h3
                     class="text-lg font-medium text-gray-100"
                     x-text="market.question"
@@ -434,7 +434,7 @@
                   </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-3 text-xs text-slate-400 mb-4">
+                <div class="grid grid-cols-1 gap-2 text-xs text-slate-400 mb-4 sm:grid-cols-2 sm:gap-3">
                   <div x-show="market.market_probability !== null">
                     Crowd YES:
                     <span
@@ -481,25 +481,36 @@
                     ></span>
                   </div>
                 </div>
-                <p
-                  x-show="market.description"
-                  class="text-sm text-slate-400 mb-4 line-clamp-3"
-                  x-text="market.description"
-                ></p>
-                <div class="flex flex-wrap items-center justify-between gap-3">
+                <div x-show="market.description" class="mb-4">
+                  <p
+                    class="text-sm leading-6 text-slate-400"
+                    :class="isMarketExpanded(market.id) ? '' : 'line-clamp-3'"
+                    x-text="market.description"
+                  ></p>
+                  <button
+                    type="button"
+                    x-show="market.description && market.description.length > 180"
+                    @click="toggleMarketDetails(market.id)"
+                    :aria-expanded="isMarketExpanded(market.id)"
+                    :aria-label="(isMarketExpanded(market.id) ? 'Collapse details for ' : 'Expand details for ') + market.question"
+                    class="mt-2 text-xs font-medium text-cyan-300 transition hover:text-cyan-200 focus:outline-none focus:ring-2 focus:ring-cyan-400/50 rounded"
+                    x-text="isMarketExpanded(market.id) ? 'Show less' : 'Show full context'"
+                  ></button>
+                </div>
+                <div class="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <a
                     x-show="market.source_url"
                     :href="market.source_url"
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="text-xs text-blue-400 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-400 rounded"
+                    class="text-center text-xs text-blue-400 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-400 rounded sm:text-left"
                     >Open source market</a
                   >
                   <button
                     type="button"
                     @click="prepareForecast(market.id)"
                     :aria-label="'Prepare forecast command for ' + market.question"
-                    class="rounded-lg border border-violet-900/80 bg-violet-950/40 px-3 py-1.5 text-xs font-medium text-violet-200 transition hover:border-violet-700 hover:bg-violet-950/70 focus:outline-none focus:ring-2 focus:ring-violet-400"
+                    class="w-full rounded-lg border border-violet-900/80 bg-violet-950/40 px-3 py-2 text-xs font-medium text-violet-200 transition hover:border-violet-700 hover:bg-violet-950/70 focus:outline-none focus:ring-2 focus:ring-violet-400 sm:w-auto sm:py-1.5"
                   >
                     Prepare forecast
                   </button>
@@ -629,6 +640,7 @@
           sortMode: "trending",
           probabilityFilter: "all",
           favoriteMarketIds: [],
+          expandedMarketIds: [],
           showFavoritesOnly: false,
           refreshing: false,
           lastUpdated: "",
@@ -759,6 +771,15 @@
               });
             }
             return filtered;
+          },
+          isMarketExpanded(marketId) {
+            return this.expandedMarketIds.includes(String(marketId));
+          },
+          toggleMarketDetails(marketId) {
+            const key = String(marketId);
+            this.expandedMarketIds = this.isMarketExpanded(key)
+              ? this.expandedMarketIds.filter((id) => id !== key)
+              : [...this.expandedMarketIds, key];
           },
           prepareForecast(marketId) {
             this.selectedMarketId = marketId;

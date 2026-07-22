@@ -277,6 +277,22 @@ def test_public_page_explains_market_sync_statuses():
     assert "latest cached markets are shown." in response.text
     assert "up to 25 active Polymarket markets ranked by 24-hour volume" in response.text
 
+def test_market_cards_offer_responsive_expandable_context():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert "expandedMarketIds: []" in html
+    assert "isMarketExpanded(marketId)" in html
+    assert "toggleMarketDetails(marketId)" in html
+    assert '@click="toggleMarketDetails(market.id)"' in html
+    assert ':aria-expanded="isMarketExpanded(market.id)"' in html
+    assert "Show full context" in html
+    assert "Show less" in html
+    assert "sm:flex-row sm:justify-between sm:items-start" in html
+    assert "sm:grid-cols-2 sm:gap-3" in html
+    assert "sm:w-auto sm:py-1.5" in html
+
+
 def test_market_can_prepare_forecast_quickstart():
     response = client.get("/")
     assert response.status_code == 200
