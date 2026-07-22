@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from db import Market, SessionLocal
 
 
-POLYMARKET_EVENTS_URL = "https://gamma-api.polymarket.com/events"
+POLYMARKET_MARKETS_URL = "https://gamma-api.polymarket.com/markets"
 
 
 def _json_list(value):
@@ -88,12 +88,12 @@ def sync_markets_logic(db: Session = None):
 
     try:
         response = requests.get(
-            POLYMARKET_EVENTS_URL,
+            POLYMARKET_MARKETS_URL,
             params={
                 "limit": 25,
                 "active": "true",
                 "closed": "false",
-                "order": "volume_24hr",
+                "order": "volume24hr",
                 "ascending": "false",
             },
             headers={"Accept": "application/json"},
@@ -106,7 +106,10 @@ def sync_markets_logic(db: Session = None):
 
         added = 0
         updated = 0
-        for values in _market_records(events):
+        trending_ids = set()
+        for trend_rank, values in enumerate(_market_records(events), start=1):
+            values["trend_rank"] = trend_rank
+            trending_ids.add(values["source_market_id"])
             market = (
                 db.query(Market)
                 .filter(Market.source_market_id == values["source_market_id"])
@@ -121,8 +124,23 @@ def sync_markets_logic(db: Session = None):
                     setattr(market, field, value)
                 updated += 1
 
+        hidden = 0
+        if trending_ids:
+            hidden = (
+                db.query(Market)
+                .filter(
+                    Market.source == "Polymarket",
+                    Market.resolution_status == "OPEN",
+                    ~Market.source_market_id.in_(trending_ids),
+                )
+                .update(
+                    {Market.resolution_status: "NOT_TRENDING"},
+                    synchronize_session=False,
+                )
+            )
+
         db.commit()
-        return {"added": added, "updated": updated}
+        return {"added": added, "updated": updated, "hidden": hidden}
     except Exception as exc:
         db.rollback()
         raise RuntimeError(f"Sync failed: {exc}") from exc

@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: prediction-agents-platform
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: uv sync --locked
+    startCommand: uv run alembic upgrade head && uv run uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: false
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.5
+      - key: ADMIN_KEY
+        generateValue: true
+      - key: MARKET_AUTO_SYNC_ENABLED
+        value: "true"
+      - key: MARKET_SYNC_INTERVAL_SECONDS
+        value: "300"

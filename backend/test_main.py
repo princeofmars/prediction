@@ -3,7 +3,7 @@ import os
 import sqlite3
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import bcrypt
 import pytest
@@ -13,6 +13,7 @@ TEST_DB_FILE = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
 TEST_DB_FILE.close()
 os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB_FILE.name}"
 os.environ["ADMIN_KEY"] = "test-admin-key"
+os.environ["MARKET_AUTO_SYNC_ENABLED"] = "false"
 
 from alembic import command  # noqa: E402
 from alembic.config import Config  # noqa: E402
@@ -20,7 +21,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from db import Agent, Base, Market, SessionLocal, engine  # noqa: E402
 from main import ADMIN_KEY, app  # noqa: E402
 from runner import build_prompt, validate_forecast  # noqa: E402
-from sync_polymarket import _market_records  # noqa: E402
+from sync_polymarket import _market_records, sync_markets_logic  # noqa: E402
 
 
 client = TestClient(app)
@@ -69,6 +70,566 @@ def prediction_payload(market_id, probability=0.75):
     }
 
 
+def test_health_endpoint_checks_database():
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "ok",
+        "service": "prediction-agents-platform",
+    }
+
+
+def test_api_explorer_defaults_to_a_clean_safe_view():
+    response = client.get("/docs")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    html = response.text
+    assert '"defaultModelsExpandDepth": -1' in html
+    assert '"displayRequestDuration": true' in html
+    assert '"docExpansion": "none"' in html
+    assert '"filter": true' in html
+    assert '"persistAuthorization": false' in html
+    assert '"requestSnippetsEnabled": true' in html
+    assert '"defaultExpanded": false' in html
+    assert '"languages": ["curl_bash"]' in html
+
+
+def test_openapi_is_grouped_and_documents_authentication_boundaries():
+    response = client.get("/openapi.json")
+    assert response.status_code == 200
+    schema = response.json()
+
+    assert schema["info"]["version"] == "1.0.0"
+    assert "contribution-first forecasting network" in schema["info"]["description"]
+    assert [tag["name"] for tag in schema["tags"]] == [
+        "Interface",
+        "Platform",
+        "Agent onboarding",
+        "Markets",
+        "Forecasts",
+        "Leaderboard",
+        "Admin",
+    ]
+    assert set(schema["paths"]) == {
+        "/",
+        "/admin",
+        "/agents/onboarding",
+        "/agents/onboard",
+        "/health",
+        "/markets",
+        "/predictions",
+        "/leaderboard",
+        "/markets/{market_id}/predictions",
+        "/api/admin/agents",
+        "/api/admin/agents/{agent_id}/rotate-key",
+        "/api/admin/sync",
+        "/api/admin/markets/{market_id}/resolve",
+    }
+
+    forecast = schema["paths"]["/predictions"]["post"]
+    consensus = schema["paths"]["/markets/{market_id}/predictions"]["get"]
+    admin_sync = schema["paths"]["/api/admin/sync"]["post"]
+    assert forecast["tags"] == ["Forecasts"]
+    assert forecast["summary"] == "Submit an independent forecast and unlock consensus"
+    assert forecast["security"] == [{"AgentApiKey": []}]
+    assert consensus["security"] == [{"AgentApiKey": []}]
+    assert admin_sync["tags"] == ["Admin"]
+    assert admin_sync["security"] == [{"AdminApiKey": []}]
+    assert schema["components"]["securitySchemes"]["AgentApiKey"]["name"] == "X-Agent-Key"
+    assert schema["components"]["securitySchemes"]["AdminApiKey"]["name"] == "X-Admin-Key"
+
+
+def test_openapi_includes_copy_ready_onboarding_and_forecast_examples():
+    response = client.get("/openapi.json")
+    assert response.status_code == 200
+    schemas = response.json()["components"]["schemas"]
+
+    assert schemas["AgentCreate"]["examples"] == [
+        {
+            "name": "macro-signal-agent",
+            "model": "claude-sonnet-4-5",
+        }
+    ]
+    assert schemas["PredictionCreate"]["examples"] == [
+        {
+            "market_id": 42,
+            "probability_yes": 0.62,
+            "confidence_score": 0.75,
+            "reasoning": "Independent evidence suggests a modest YES edge.",
+        }
+    ]
+    assert schemas["PredictionCreate"]["properties"]["market_id"]["examples"] == [42]
+    assert (
+        schemas["PredictionCreate"]["properties"]["probability_yes"]["description"]
+        == "Independent probability that the market resolves YES"
+    )
+
+
+def test_public_page_explains_agent_onboarding_and_consensus_unlock():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert "Agent onboarding protocol" in html
+    assert "Self-onboard, contribute independently, unlock consensus." in html
+    assert "Save the one-time agent key." in html
+    assert "Discover current markets." in html
+    assert "Commit an independent forecast." in html
+    assert 'href="/agents/onboarding"' in html
+    assert "Agent forecasts unlock only after your agent submits" in html
+    assert "market.predictions" not in html
+
+
+
+def test_public_page_can_retrieve_unlocked_consensus_from_quickstart():
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "Retrieve the unlocked view later." in response.text
+    assert "@click=\"quickstartStep = 'consensus'\"" in response.text
+    assert ":aria-pressed=\"quickstartStep === 'consensus'\"" in response.text
+    assert 'this.quickstartStep === "consensus"' in response.text
+    assert '/markets/${marketId}/predictions' in response.text
+    assert '-H "X-Agent-Key: YOUR_AGENT_KEY"' in response.text
+
+
+def test_public_page_gives_contextual_quickstart_guidance():
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert 'x-text="quickstartGuidance"' in response.text
+    assert "get quickstartGuidance()" in response.text
+    assert "displayed once and cannot be recovered" in response.text
+    assert "automatic synchronization without an admin key" in response.text
+    assert "Form an independent probability before submitting" in response.text
+    assert "only after the same agent has forecast the selected market" in response.text
+
+
+def test_public_page_announces_current_quickstart_step():
+    response = client.get("/")
+
+    assert response.status_code == 200
+    html = response.text
+    assert 'aria-label="Current quickstart step"' in html
+    assert 'x-text="quickstartPosition"' in html
+    assert "get quickstartPosition()" in html
+    assert 'onboard: { number: 1, label: "Onboard" }' in html
+    assert 'consensus: { number: 4, label: "Consensus" }' in html
+    assert "Step ${current.number} of 4 · ${current.label}" in html
+
+def test_public_page_shows_service_health_status():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert 'role="status"' in html
+    assert 'aria-live="polite"' in html
+    assert 'healthStatus: "Checking..."' in html
+    assert "async fetchHealth()" in html
+    assert 'fetch("/health")' in html
+    assert 'this.healthStatus = "Online"' in html
+    assert 'this.healthStatus = "Unavailable"' in html
+    assert '@click="fetchHealth"' in html
+    assert ':disabled="healthChecking"' in html
+    assert 'healthChecking: false' in html
+    assert "if (this.healthChecking) return false" in html
+    assert "this.healthChecking = false" in html
+
+
+def test_public_page_labels_trending_markets():
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "Trending Markets (24h volume)" in response.text
+
+
+def test_public_page_shows_market_sync_status():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert 'aria-label="Market synchronization status"' in html
+    assert 'role="status"' in html
+    assert 'marketSyncStatus: "Checking"' in html
+    assert 'response.headers.get("X-Market-Sync")' in html
+    assert 'refreshed: "Fresh"' in html
+    assert 'recent: "Current"' in html
+    assert '"in-progress": "Refreshing"' in html
+    assert 'unavailable: "Cached"' in html
+    assert 'this.marketSyncStatus = "Unavailable"' in html
+    assert ':class="marketSyncTone"' in html
+
+
+def test_public_page_has_trending_market_search():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert 'aria-label="Search trending markets"' in html
+    assert 'x-for="market in filteredMarkets"' in html
+    assert "No trending markets match your search." in html
+    assert "get filteredMarkets()" in html
+
+
+
+def test_public_page_filters_markets_by_probability():
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert 'aria-label="Filter trending markets by probability"' in response.text
+    assert 'probabilityFilter: "all"' in response.text
+    assert '<option value="toss-up">Toss-up (40% to 60% YES)</option>' in response.text
+    assert '<option value="yes">Leaning YES (above 60%)</option>' in response.text
+    assert '<option value="no">Leaning NO (below 40%)</option>' in response.text
+    assert 'this.probabilityFilter === "toss-up"' in response.text
+    assert "probability >= 0.4 && probability <= 0.6" in response.text
+    assert 'this.probabilityFilter = "all";' in response.text
+    assert "probabilityFilter !== 'all'" in response.text
+
+
+def test_public_page_supports_keyboard_first_market_search():
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert '@keydown.window="handleSearchShortcut($event)"' in response.text
+    assert "<kbd" in response.text
+    assert "to search" in response.text
+    assert "handleSearchShortcut(event)" in response.text
+    assert 'event.key === "/"' in response.text
+    assert 'event.key === "Escape"' in response.text
+    assert 'document.getElementById("market-search")?.focus()' in response.text
+    assert "document.activeElement.blur()" in response.text
+    assert "Reset market search, probability, sorting, and favorite filters" in response.text
+
+
+def test_public_page_shows_individually_clearable_active_filters():
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert 'aria-label="Active market filters"' in response.text
+    assert ">Active filters</span>" in response.text
+    assert "Clear search filter:" in response.text
+    assert '@click="searchQuery = \'\'"' in response.text
+    assert 'aria-label="Clear probability filter"' in response.text
+    assert '@click="probabilityFilter = \'all\'"' in response.text
+    assert 'aria-label="Clear market sorting"' in response.text
+    assert '@click="sortMode = \'trending\'"' in response.text
+    assert 'aria-label="Clear favorites-only filter"' in response.text
+    assert '@click="showFavoritesOnly = false"' in response.text
+
+
+def test_public_page_explains_market_sync_statuses():
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert 'aria-label="Explain market synchronization status"' in response.text
+    assert 'aria-label="Market synchronization status"' in response.text
+    assert "Market data status" in response.text
+    assert "marketSyncDescription" in response.text
+    assert "Polymarket data was refreshed during this request." in response.text
+    assert "latest cached markets are shown." in response.text
+    assert "up to 25 active Polymarket markets ranked by 24-hour volume" in response.text
+
+def test_market_cards_offer_responsive_expandable_context():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert "expandedMarketIds: []" in html
+    assert "isMarketExpanded(marketId)" in html
+    assert "toggleMarketDetails(marketId)" in html
+    assert '@click="toggleMarketDetails(market.id)"' in html
+    assert ':aria-expanded="isMarketExpanded(market.id)"' in html
+    assert "Show full context" in html
+    assert "Show less" in html
+    assert "sm:flex-row sm:justify-between sm:items-start" in html
+    assert "sm:grid-cols-3 sm:gap-3" in html
+    assert "sm:flex-none sm:py-1.5" in html
+
+
+
+
+def test_market_cards_show_sync_freshness_with_exact_timestamp():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert 'x-show="market.updated_at"' in html
+    assert ':datetime="market.updated_at"' in html
+    assert "Last synchronized " in html
+    assert "parseUtcTimestamp(value)" in html
+    assert "formatMarketFreshness(value)" in html
+    assert "formatMarketUpdatedTitle(value)" in html
+    assert "just now" in html
+    assert "time unavailable" in html
+    assert r"/(Z|[+-]\d{2}:\d{2})$/.test(timestamp)" in html
+
+
+def test_market_cards_show_accessible_trending_rank():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert 'x-show="market.trend_rank"' in html
+    assert ":aria-label=\"'Trending rank ' + market.trend_rank\"" in html
+    assert "x-text=\"'#' + market.trend_rank\"" in html
+    assert "border-cyan-400/20 bg-cyan-400/10" in html
+
+
+def test_market_can_prepare_forecast_quickstart():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert 'id="agent-onboarding"' in html
+    assert "selectedMarketId: null" in html
+    assert '@click="prepareForecast(market.id)"' in html
+    assert "Prepare forecast command for" in html
+    assert "prepareForecast(marketId)" in html
+    assert 'this.quickstartStep = "forecast"' in html
+    assert "this.selectedMarketId = marketId" in html
+    assert 'document.getElementById("agent-onboarding")' in html
+    assert 'onboarding.querySelector("summary")?.focus()' in html
+    assert '"(prefers-reduced-motion: reduce)"' in html
+    assert "get quickstartMarketId()" in html
+    assert "const marketId = this.quickstartMarketId" in html
+    assert '"market_id":${marketId}' in html
+
+
+
+def test_quickstart_accepts_and_validates_a_market_id():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert 'id="quickstart-market-id"' in html
+    assert 'inputmode="numeric"' in html
+    assert 'pattern="[0-9]*"' in html
+    assert 'x-model.trim="selectedMarketId"' in html
+    assert 'aria-describedby="quickstart-market-id-help"' in html
+    assert ':aria-invalid=' in html
+    assert "get quickstartMarketId()" in html
+    assert "get hasValidSelectedMarketId()" in html
+    assert r"/^\d+$/.test(value)" in html
+    assert "Enter the numeric ID shown on a market card." in html
+    assert "Command ready for market " in html
+
+
+def test_leaderboard_filters_by_forecast_evidence():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert "leaderboardMinimumForecasts: 0" in html
+    assert "get filteredLeaderboard()" in html
+    assert 'aria-label="Filter leaderboard by minimum forecast count"' in html
+    assert "threshold in [0, 1, 5]" in html
+    assert "All agents" in html
+    assert "threshold + '+ forecasts'" in html
+    assert '<template x-for="(agent, index) in filteredLeaderboard"' in html
+    assert "No agents meet this forecast threshold yet." in html
+    assert "sm:flex-row sm:items-center sm:justify-between" in html
+    assert "text-left sm:text-right" in html
+
+
+def test_public_leaderboard_explains_forecast_score():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert 'id="forecast-score-help"' in html
+    assert 'role="note"' in html
+    assert 'aria-describedby="forecast-score-help"' in html
+    assert "Forecast score is 1 minus mean Brier score." in html
+    assert "Higher is better" in html
+
+
+def test_public_leaderboard_shows_forecast_counts():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert "agent.predictions_count || 0" in html
+    assert "' forecast'" in html
+    assert "' forecasts'" in html
+
+
+def test_public_page_can_reset_market_view():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert (
+        'aria-label="Reset market search, probability, sorting, and favorite filters"'
+        in html
+    )
+    assert '@click="resetMarketView"' in html
+    assert "resetMarketView()" in html
+    assert 'this.searchQuery = ""' in html
+    assert 'this.sortMode = "trending"' in html
+    assert "this.showFavoritesOnly = false" in html
+
+
+def test_public_page_supports_local_market_favorites():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert 'aria-label="Show favorite markets only"' in html
+    assert '@click="toggleFavorite(market.id)"' in html
+    assert ':aria-pressed="isFavorite(market.id)"' in html
+    assert '"favoriteMarketIds"' in html
+    assert 'localStorage.setItem(' in html
+    assert "showFavoritesOnly: false" in html
+
+
+def test_public_page_shows_market_time_remaining():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert "formatTimeRemaining(market.end_date)" in html
+    assert "formatTimeRemaining(endDate)" in html
+    assert 'return "closing"' in html
+    assert "h left" in html
+    assert "d left" in html
+
+
+def test_public_page_has_accessible_probability_meter():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert 'role="progressbar"' in html
+    assert 'aria-valuemin="0"' in html
+    assert 'aria-valuemax="100"' in html
+    assert ':aria-valuenow="Math.round(market.market_probability * 100)"' in html
+    assert "Crowd YES probability " in html
+    assert "Math.round((1 - market.market_probability) * 100)" in html
+
+
+def test_public_page_can_sort_trending_markets():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert 'aria-label="Sort trending markets"' in html
+    assert '<option value="trending">Trending order</option>' in html
+    assert '<option value="probability-desc">Highest YES probability</option>' in html
+    assert '<option value="probability-asc">Lowest YES probability</option>' in html
+    assert '<option value="closing-soon">Closing soon</option>' in html
+    assert 'sortMode: "trending"' in html
+
+
+def test_public_page_distinguishes_leaderboard_loading_and_empty_states():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert "leaderboardLoading: true" in html
+    assert "leaderboardLoadFailed: false" in html
+    assert "this.leaderboardLoading = true" in html
+    assert "this.leaderboardLoading = false" in html
+    assert "this.leaderboardLoadFailed = true" in html
+    assert 'x-show="leaderboardLoading"' in html
+    assert "Loading leaderboard..." in html
+    assert "No ranked agents yet." in html
+    assert "Scores appear after agents make forecasts and markets resolve." in html
+    assert "No agents deployed yet." not in html
+
+
+def test_public_page_distinguishes_market_loading_and_empty_states():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert "marketsLoading: true" in html
+    assert "marketsLoadFailed: false" in html
+    assert "this.marketsLoading = true" in html
+    assert "this.marketsLoading = false" in html
+    assert "this.marketsLoadFailed = true" in html
+    assert 'x-show="marketsLoading"' in html
+    assert "Loading trending markets..." in html
+    assert "No trending markets are available yet." in html
+    assert "Markets refresh automatically from Polymarket." in html
+    assert "Open admin to sync Polymarket" not in html
+    assert "Loading markets or no markets available..." not in html
+
+
+def test_public_page_shows_data_loading_errors_with_retry():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert 'role="alert"' in html
+    assert 'aria-live="assertive"' in html
+    assert "dataErrors: []" in html
+    assert "this.dataErrors = []" in html
+    assert 'Trending markets could not be loaded.' in html
+    assert 'Leaderboard could not be loaded.' in html
+    assert 'x-text="dataErrors.join(\' \')"' in html
+    assert '@click="refreshData"' in html
+    assert "Try again" in html
+
+
+def test_public_page_has_manual_data_refresh():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert 'aria-label="Refresh market and leaderboard data"' in html
+    assert '@click="refreshData"' in html
+    assert "refreshing ? 'Refreshing...' : 'Refresh data'" in html
+    assert "async refreshData()" in html
+    assert "this.lastUpdated = new Date().toLocaleTimeString" in html
+
+
+def test_public_page_supports_opt_in_auto_refresh():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert 'aria-label="Automatically refresh data every 60 seconds"' in html
+    assert 'x-model="autoRefreshEnabled"' in html
+    assert '@change="toggleAutoRefresh"' in html
+    assert "autoRefreshEnabled: false" in html
+    assert "toggleAutoRefresh()" in html
+    assert "setInterval(" in html
+    assert "60 * 1000" in html
+    assert "clearInterval(this.autoRefreshTimer)" in html
+
+
+def test_admin_page_supports_safe_key_visibility_control():
+    response = client.get("/admin")
+    assert response.status_code == 200
+    html = response.text
+    assert "glass-panel" in html
+    assert "Manage agents, optionally force-refresh markets, and resolve outcomes." in html
+    assert "radial-gradient" in html
+    assert "showAdminKey: false" in html
+    assert ":type=\"showAdminKey ? 'text' : 'password'\"" in html
+    assert 'autocomplete="off"' in html
+    assert 'aria-label="Admin API key"' in html
+    assert '@click="showAdminKey = !showAdminKey"' in html
+    assert ":aria-pressed=\"showAdminKey\"" in html
+    assert "'Hide admin key' : 'Show admin key'" in html
+    assert '@click="clearAdminKey"' in html
+    assert 'aria-label="Clear admin key and lock protected controls"' in html
+    assert "clearAdminKey()" in html
+    assert 'this.adminKey = ""' in html
+    assert "this.showAdminKey = false" in html
+    assert 'this.successMessage = "Admin key cleared from this tab."' in html
+    assert "Used only in this tab and never saved." in html
+    assert "localStorage" not in html
+
+
+def test_admin_page_locks_protected_controls_until_key_is_entered():
+    response = client.get("/admin")
+    assert response.status_code == 200
+    html = response.text
+    assert 'x-ref="adminKeyInput"' in html
+    assert "Protected controls locked" in html
+    assert "Admin key entered" in html
+    assert "get hasAdminKey()" in html
+    assert "requireAdminKey()" in html
+    assert 'this.error = "Enter the admin key to use protected controls."' in html
+    assert "this.$refs.adminKeyInput.focus()" in html
+    assert ':disabled="syncing || !hasAdminKey"' in html
+    assert html.count(':disabled="!hasAdminKey"') == 4
+    assert html.count("if (!this.requireAdminKey()) return;") == 4
+
+
+def test_admin_page_has_loading_empty_and_error_states():
+    response = client.get("/admin")
+    assert response.status_code == 200
+    html = response.text
+    assert "Loading markets..." in html
+    assert "Automatic sync has not returned open markets yet." in html
+    assert "Manual refresh is optional." in html
+    assert "Loading agents..." in html
+    assert "No agents deployed yet. Create an agent above." in html
+    assert "Failed to load markets:" in html
+    assert "Failed to load agents:" in html
+
+
+
 def test_admin_auth_required_and_invalid():
     assert client.post("/api/admin/sync").status_code == 401
     response = client.post("/api/admin/sync", headers={"X-Admin-Key": "wrong"})
@@ -99,6 +660,141 @@ def test_agent_creation_hashes_key_and_duplicate_is_conflict():
         json={"name": "Test Agent", "model": "gpt-4o-mini"},
     )
     assert duplicate.status_code == 409
+
+
+def test_agent_skill_is_public_and_documents_contribution_protocol():
+    response = client.get("/agent-skill.md")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
+    skill = response.text
+    assert skill.startswith("---\nname: prediction-platform-agent")
+    assert "Form an independent forecast." in skill
+    assert "Contribute and unlock consensus" in skill
+    assert "Use revealed forecasts responsibly" in skill
+    assert "X-Agent-Key" in skill
+    assert "Never print, log, commit, share" in skill
+
+
+def test_public_ui_uses_minimal_futuristic_design_and_skill_entrypoint():
+    html = client.get("/").text
+    assert "Independent intelligence layer" in html
+    assert "Forecast first." in html
+    assert "Learn together." in html
+    assert 'class="glass-panel' in html
+    assert 'class="market-card' in html
+    assert 'href="/agent-skill.md"' in html
+    assert "Agent onboarding protocol" in html
+    assert 'aria-label="Copy agent skill URL"' in html
+    assert '@click="copySkillUrl"' in html
+    assert "navigator.clipboard.writeText(skillUrl)" in html
+    assert 'this.copiedResource = "Skill URL copied"' in html
+    assert "Agent quickstart" in html
+    assert 'aria-label="Select agent quickstart step"' in html
+    assert ":aria-pressed" in html
+    assert "quickstartStep: \"onboard\"" in html
+    assert 'aria-label="Copy selected agent quickstart command"' in html
+    assert '@click="copyQuickstartCommand"' in html
+    assert 'x-text="quickstartCommand"' in html
+    assert "${origin}/agents/onboard" in html
+    assert "${origin}/markets" in html
+    assert "${origin}/predictions" in html
+    assert "probability_yes" in html
+    assert "confidence_score" in html
+    assert "navigator.clipboard.writeText(this.quickstartCommand)" in html
+    assert 'this.copiedResource = "Quickstart command copied"' in html
+    assert 'this.copiedResource = "Copy failed"' in html
+    assert 'aria-live="polite"' in html
+    assert "prefers-reduced-motion" in html
+    assert "focus:ring" in html
+
+
+def test_agent_can_self_onboard_and_receives_one_time_key():
+    response = client.post(
+        "/agents/onboard",
+        json={"name": "Self Agent", "model": "gpt-4o-mini"},
+    )
+    assert response.status_code == 201
+    data = response.json()
+    raw_key = data["api_key"]
+    assert data["agent"]["name"] == "Self Agent"
+    assert "shown once" in data["credential_notice"]
+
+    with SessionLocal() as db:
+        agent = db.query(Agent).filter(Agent.name == "Self Agent").one()
+        assert agent.hashed_api_key == hashlib.sha256(raw_key.encode()).hexdigest()
+        assert agent.hashed_api_key != raw_key
+
+    duplicate = client.post(
+        "/agents/onboard",
+        json={"name": "Self Agent", "model": "gpt-4o-mini"},
+    )
+    assert duplicate.status_code == 409
+
+
+def test_onboarding_guide_documents_predict_before_consensus():
+    response = client.get("/agents/onboarding")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["workflow"] == "predict_before_consensus"
+    assert data["skill_url"] == "/agent-skill.md"
+    assert data["credential"]["returned_once"] is True
+    assert data["market_sync"] == {
+        "automatic": True,
+        "trigger": "GET /markets",
+        "admin_key_required": False,
+        "refresh_interval_seconds": 300,
+    }
+    assert data["steps"][0]["path"] == "/agents/onboard"
+    forecast_step = data["steps"][2]
+    assert forecast_step["path"] == "/predictions"
+    assert forecast_step["body"] == {
+        "market_id": "MARKET_ID",
+        "probability_yes": 0.62,
+        "confidence_score": 0.75,
+        "reasoning": "Independent evidence summary",
+    }
+    assert data["steps"][-1]["requires"]
+
+
+def test_peer_consensus_is_revealed_only_after_own_prediction():
+    market_id = create_market()
+    first_key = create_agent("First Agent")
+    second_key = create_agent("Second Agent")
+
+    first_vote = client.post(
+        "/predictions",
+        json=prediction_payload(market_id, probability=0.8),
+        headers={"X-Agent-Key": first_key},
+    )
+    assert first_vote.status_code == 200
+    assert first_vote.json()["peer_consensus"]["peer_count"] == 0
+
+    locked = client.get(
+        f"/markets/{market_id}/predictions",
+        headers={"X-Agent-Key": second_key},
+    )
+    assert locked.status_code == 403
+    assert "Submit your own prediction" in locked.json()["detail"]
+
+    second_vote = client.post(
+        "/predictions",
+        json=prediction_payload(market_id, probability=0.4),
+        headers={"X-Agent-Key": second_key},
+    )
+    assert second_vote.status_code == 200
+    revealed = second_vote.json()["peer_consensus"]
+    assert revealed["revealed"] is True
+    assert revealed["peer_count"] == 1
+    assert revealed["mean_probability_yes"] == pytest.approx(0.8)
+    assert revealed["forecasts"][0]["agent_name"] == "First Agent"
+
+    later = client.get(
+        f"/markets/{market_id}/predictions",
+        headers={"X-Agent-Key": second_key},
+    )
+    assert later.status_code == 200
+    assert later.json()["own_forecast"]["probability_yes"] == pytest.approx(0.4)
+    assert later.json()["peer_consensus"]["peer_count"] == 1
 
 
 def test_prediction_auth_validation_and_duplicate_protection():
@@ -132,7 +828,7 @@ def test_prediction_auth_validation_and_duplicate_protection():
     assert duplicate.status_code == 409
 
 
-def test_public_predictions_and_brier_scoring():
+def test_gated_predictions_and_brier_scoring():
     market_id = create_market()
     raw_key = create_agent()
     response = client.post(
@@ -142,10 +838,14 @@ def test_public_predictions_and_brier_scoring():
     )
     assert response.status_code == 200
 
-    public_predictions = client.get(f"/markets/{market_id}/predictions")
-    assert public_predictions.status_code == 200
-    assert public_predictions.json()[0]["agent_name"] == "Test Agent"
-    assert public_predictions.json()[0]["probability_yes"] == 0.75
+    assert client.get(f"/markets/{market_id}/predictions").status_code == 401
+    revealed = client.get(
+        f"/markets/{market_id}/predictions",
+        headers={"X-Agent-Key": raw_key},
+    )
+    assert revealed.status_code == 200
+    assert revealed.json()["own_forecast"]["probability_yes"] == 0.75
+    assert revealed.json()["peer_consensus"]["peer_count"] == 0
 
     resolved = client.post(
         f"/api/admin/markets/{market_id}/resolve?status=RESOLVED_YES",
@@ -217,6 +917,87 @@ def test_bcrypt_release_key_is_accepted_and_upgraded():
         assert stored == hashlib.sha256(raw_key.encode()).hexdigest()
 
 
+@patch("main.sync_markets_logic")
+def test_public_markets_auto_sync_without_admin_key(mock_sync, monkeypatch):
+    import main as main_module
+
+    monkeypatch.setattr(main_module, "MARKET_AUTO_SYNC_ENABLED", True)
+    monkeypatch.setattr(main_module, "_last_market_sync_attempt", 0.0)
+
+    def populate_markets(db):
+        db.add(
+            Market(
+                source_market_id="auto-sync-market",
+                source="Polymarket",
+                question="Will automatic synchronization work?",
+                resolution_status="OPEN",
+            )
+        )
+        db.commit()
+        return {"added": 1, "updated": 0, "hidden": 0}
+
+    mock_sync.side_effect = populate_markets
+
+    first = client.get("/markets")
+    second = client.get("/markets")
+
+    assert first.status_code == 200
+    assert first.headers["x-market-sync"] == "refreshed"
+    assert first.json()[0]["source_market_id"] == "auto-sync-market"
+    assert second.status_code == 200
+    assert second.headers["x-market-sync"] == "recent"
+    mock_sync.assert_called_once()
+
+
+@patch("main.sync_markets_logic")
+def test_public_markets_serve_cached_data_when_auto_sync_fails(
+    mock_sync, monkeypatch
+):
+    import main as main_module
+
+    monkeypatch.setattr(main_module, "MARKET_AUTO_SYNC_ENABLED", True)
+    monkeypatch.setattr(main_module, "_last_market_sync_attempt", 0.0)
+    with SessionLocal() as db:
+        db.add(
+            Market(
+                source_market_id="cached-market",
+                source="Polymarket",
+                question="Will cached markets remain available?",
+                resolution_status="OPEN",
+            )
+        )
+        db.commit()
+
+    mock_sync.side_effect = RuntimeError("Polymarket unavailable")
+    response = client.get("/markets")
+
+    assert response.status_code == 200
+    assert response.headers["x-market-sync"] == "unavailable"
+    assert response.json()[0]["source_market_id"] == "cached-market"
+
+
+@patch("sync_polymarket.requests.get")
+def test_market_sync_uses_supported_public_events_query(mock_get):
+    response = Mock()
+    response.json.return_value = []
+    mock_get.return_value = response
+
+    assert sync_markets_logic() == {"added": 0, "updated": 0, "hidden": 0}
+    mock_get.assert_called_once_with(
+        "https://gamma-api.polymarket.com/markets",
+        params={
+            "limit": 25,
+            "active": "true",
+            "closed": "false",
+            "order": "volume24hr",
+            "ascending": "false",
+        },
+        headers={"Accept": "application/json"},
+        timeout=10,
+    )
+    response.raise_for_status.assert_called_once()
+
+
 def test_market_context_parsing_and_runner_prompt():
     records = list(
         _market_records(
@@ -260,6 +1041,75 @@ def test_market_context_parsing_and_runner_prompt():
     )
 
 
+
+def test_public_markets_preserve_polymarket_trending_order():
+    with SessionLocal() as db:
+        db.add_all(
+            [
+                Market(
+                    source_market_id="rank-two",
+                    source="Polymarket",
+                    question="Second by volume",
+                    trend_rank=2,
+                    resolution_status="OPEN",
+                ),
+                Market(
+                    source_market_id="rank-one",
+                    source="Polymarket",
+                    question="First by volume",
+                    trend_rank=1,
+                    resolution_status="OPEN",
+                ),
+            ]
+        )
+        db.commit()
+
+    response = client.get("/markets")
+    assert response.status_code == 200
+    assert [market["source_market_id"] for market in response.json()] == [
+        "rank-one",
+        "rank-two",
+    ]
+
+
+@patch("sync_polymarket.requests.get")
+def test_market_sync_persists_polymarket_volume_rank(mock_get):
+    response = Mock()
+    response.json.return_value = [
+        {
+            "id": "volume-first",
+            "question": "Highest volume market",
+            "outcomes": '["Yes", "No"]',
+            "outcomePrices": '["0.70", "0.30"]',
+        },
+        {
+            "id": "volume-second",
+            "question": "Second-highest volume market",
+            "outcomes": '["Yes", "No"]',
+            "outcomePrices": '["0.40", "0.60"]',
+        },
+    ]
+    mock_get.return_value = response
+
+    assert sync_markets_logic() == {"added": 2, "updated": 0, "hidden": 0}
+    with SessionLocal() as db:
+        markets = db.query(Market).order_by(Market.trend_rank).all()
+        assert [
+            (market.source_market_id, market.trend_rank) for market in markets
+        ] == [("volume-first", 1), ("volume-second", 2)]
+
+
+def test_public_market_cards_can_copy_agent_ready_market_ids():
+    html = client.get("/").text
+    assert 'copiedMarketId: ""' in html
+    assert '@click="copyMarketId(market.id)"' in html
+    assert ":aria-label=\"'Copy market ID ' + market.id\"" in html
+    assert "'ID copied' : 'Copy market ID'" in html
+    assert "async copyMarketId(marketId)" in html
+    assert "navigator.clipboard.writeText(value)" in html
+    assert 'this.copiedResource = "Copy failed"' in html
+
+
 def alembic_config(database_url):
     config = Config(str(Path(__file__).with_name("alembic.ini")))
     config.set_main_option("sqlalchemy.url", database_url)
@@ -278,8 +1128,12 @@ def test_alembic_clean_install(tmp_path):
             "SELECT name FROM sqlite_master WHERE type = 'table'"
         ).fetchall()
     }
+    market_columns = {
+        row[1] for row in connection.execute("PRAGMA table_info(markets)").fetchall()
+    }
     connection.close()
     assert {"agents", "markets", "predictions", "alembic_version"} <= set(tables)
+    assert "trend_rank" in market_columns
 
 
 def test_alembic_adopts_legacy_database_and_preserves_key(tmp_path):
@@ -396,6 +1250,6 @@ def test_alembic_upgrades_applied_bcrypt_release(tmp_path):
     ]
     connection.close()
 
-    assert {"source_market_id", "description", "market_probability"} <= market_columns
+    assert {"source_market_id", "description", "market_probability", "trend_rank"} <= market_columns
     assert preserved_hash == bcrypt_hash
-    assert version == "8c63c4e1a4f2"
+    assert version == "5e14b6c7d8f9"
