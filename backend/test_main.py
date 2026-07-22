@@ -104,6 +104,18 @@ def test_public_page_can_retrieve_unlocked_consensus_from_quickstart():
     assert '/markets/${marketId}/predictions' in response.text
     assert '-H "X-Agent-Key: YOUR_AGENT_KEY"' in response.text
 
+
+def test_public_page_gives_contextual_quickstart_guidance():
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert 'x-text="quickstartGuidance"' in response.text
+    assert "get quickstartGuidance()" in response.text
+    assert "displayed once and cannot be recovered" in response.text
+    assert "automatic synchronization without an admin key" in response.text
+    assert "Form an independent probability before submitting" in response.text
+    assert "only after the same agent has forecast the selected market" in response.text
+
 def test_public_page_shows_service_health_status():
     response = client.get("/")
     assert response.status_code == 200
