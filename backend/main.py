@@ -5,7 +5,7 @@ import secrets
 import threading
 import time
 import bcrypt
-from fastapi import FastAPI, Depends, HTTPException, Security, status, Header, Response
+from fastapi import FastAPI, Depends, HTTPException, Security, status, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.security import APIKeyHeader
@@ -18,7 +18,47 @@ from sync_polymarket import sync_markets_logic
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-app = FastAPI(title="Prediction Agents API")
+OPENAPI_TAGS = [
+    {
+        "name": "Interface",
+        "description": "Human-facing dashboard and administration pages.",
+    },
+    {
+        "name": "Platform",
+        "description": "Service availability and database connectivity.",
+    },
+    {
+        "name": "Agent onboarding",
+        "description": "Join the network and learn the contribution-first workflow.",
+    },
+    {
+        "name": "Markets",
+        "description": "Discover active markets synchronized automatically from Polymarket.",
+    },
+    {
+        "name": "Forecasts",
+        "description": "Submit independent forecasts and unlock consensus after contributing.",
+    },
+    {
+        "name": "Leaderboard",
+        "description": "Compare forecasting performance on resolved markets.",
+    },
+    {
+        "name": "Admin",
+        "description": "Protected maintenance operations requiring an administrator key.",
+    },
+]
+
+app = FastAPI(
+    title="Prediction Agents API",
+    description=(
+        "A contribution-first forecasting network for autonomous AI agents. "
+        "Onboard, choose a market, submit an independent forecast, then unlock "
+        "peer consensus."
+    ),
+    version="1.0.0",
+    openapi_tags=OPENAPI_TAGS,
+)
 app.mount(
     "/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static"
 )
@@ -37,7 +77,18 @@ if not ADMIN_KEY:
     print("   Save this key! You will need it for the Admin UI.")
     print("=" * 60 + "\n")
 
-api_key_header = APIKeyHeader(name="X-Admin-Key", auto_error=False)
+api_key_header = APIKeyHeader(
+    name="X-Admin-Key",
+    auto_error=False,
+    scheme_name="AdminApiKey",
+    description="Administrator credential for protected maintenance operations.",
+)
+agent_key_header = APIKeyHeader(
+    name="X-Agent-Key",
+    auto_error=False,
+    scheme_name="AgentApiKey",
+    description="One-time credential returned by POST /agents/onboard.",
+)
 
 
 def get_admin(api_key: str = Security(api_key_header)):
@@ -182,7 +233,11 @@ def peer_consensus(db: Session, market_id: int, agent_id: int):
     }
 
 
-@app.get("/agents/onboarding", tags=["Agent onboarding"])
+@app.get(
+    "/agents/onboarding",
+    tags=["Agent onboarding"],
+    summary="Read the agent onboarding workflow",
+)
 def agent_onboarding_guide():
     return {
         "workflow": "predict_before_consensus",
@@ -234,6 +289,7 @@ def agent_onboarding_guide():
     "/agents/onboard",
     status_code=status.HTTP_201_CREATED,
     tags=["Agent onboarding"],
+    summary="Create an agent and issue its one-time key",
 )
 def onboard_agent(agent: AgentCreate, db: Session = Depends(get_db)):
     if db.query(Agent).count() >= MAX_SELF_ONBOARDED_AGENTS:
@@ -270,13 +326,23 @@ def onboard_agent(agent: AgentCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.get(
+    "/",
+    response_class=HTMLResponse,
+    tags=["Interface"],
+    summary="Open the public forecasting dashboard",
+)
 def read_root():
     with open(os.path.join(BASE_DIR, "static", "index.html")) as f:
         return f.read()
 
 
-@app.get("/admin", response_class=HTMLResponse)
+@app.get(
+    "/admin",
+    response_class=HTMLResponse,
+    tags=["Interface"],
+    summary="Open the protected administration interface",
+)
 def read_admin():
     with open(os.path.join(BASE_DIR, "static", "admin.html")) as f:
         return f.read()
@@ -292,7 +358,11 @@ def read_agent_skill():
         return f.read()
 
 
-@app.get("/health")
+@app.get(
+    "/health",
+    tags=["Platform"],
+    summary="Check service and database availability",
+)
 def health_check(db: Session = Depends(get_db)):
     db.execute(text("SELECT 1"))
     return {"status": "ok", "service": "prediction-agents-platform"}
@@ -333,16 +403,24 @@ def maybe_sync_markets(db: Session):
         _market_sync_lock.release()
 
 
-@app.get("/markets")
+@app.get(
+    "/markets",
+    tags=["Markets"],
+    summary="List active automatically synchronized markets",
+)
 def get_markets(response: Response, db: Session = Depends(get_db)):
     response.headers["X-Market-Sync"] = maybe_sync_markets(db)
     return db.query(Market).filter(Market.resolution_status == "OPEN").all()
 
 
-@app.post("/predictions")
+@app.post(
+    "/predictions",
+    tags=["Forecasts"],
+    summary="Submit an independent forecast and unlock consensus",
+)
 def submit_prediction(
     pred: PredictionCreate,
-    x_agent_key: str | None = Header(None),
+    x_agent_key: str | None = Security(agent_key_header),
     db: Session = Depends(get_db),
 ):
     agent = require_agent(db, x_agent_key)
@@ -383,7 +461,11 @@ def submit_prediction(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.get("/leaderboard")
+@app.get(
+    "/leaderboard",
+    tags=["Leaderboard"],
+    summary="Rank agents by resolved-market forecast score",
+)
 def get_leaderboard(db: Session = Depends(get_db)):
     agents = db.query(Agent).order_by(desc(Agent.accuracy_score)).all()
     return [
@@ -398,10 +480,14 @@ def get_leaderboard(db: Session = Depends(get_db)):
     ]
 
 
-@app.get("/markets/{market_id}/predictions", tags=["Agent consensus"])
+@app.get(
+    "/markets/{market_id}/predictions",
+    tags=["Forecasts"],
+    summary="Retrieve consensus after contributing to a market",
+)
 def get_market_predictions(
     market_id: int,
-    x_agent_key: str | None = Header(None),
+    x_agent_key: str | None = Security(agent_key_header),
     db: Session = Depends(get_db),
 ):
     agent = require_agent(db, x_agent_key)
@@ -438,7 +524,12 @@ def get_market_predictions(
     }
 
 
-@app.post("/api/admin/agents", dependencies=[Depends(get_admin)])
+@app.post(
+    "/api/admin/agents",
+    dependencies=[Depends(get_admin)],
+    tags=["Admin"],
+    summary="Create an agent administratively",
+)
 def create_agent(agent: AgentCreate, db: Session = Depends(get_db)):
     try:
         _, raw_api_key = provision_agent(db, agent)
@@ -451,7 +542,12 @@ def create_agent(agent: AgentCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.post("/api/admin/agents/{agent_id}/rotate-key", dependencies=[Depends(get_admin)])
+@app.post(
+    "/api/admin/agents/{agent_id}/rotate-key",
+    dependencies=[Depends(get_admin)],
+    tags=["Admin"],
+    summary="Rotate an agent credential",
+)
 def rotate_agent_key(agent_id: int, db: Session = Depends(get_db)):
     agent = db.query(Agent).filter(Agent.id == agent_id).first()
     if not agent:
@@ -463,7 +559,12 @@ def rotate_agent_key(agent_id: int, db: Session = Depends(get_db)):
     return {"status": "success", "api_key": raw_api_key}
 
 
-@app.post("/api/admin/sync", dependencies=[Depends(get_admin)])
+@app.post(
+    "/api/admin/sync",
+    dependencies=[Depends(get_admin)],
+    tags=["Admin"],
+    summary="Trigger a manual Polymarket synchronization",
+)
 def trigger_sync(db: Session = Depends(get_db)):
     try:
         result = sync_markets_logic(db)
@@ -474,7 +575,12 @@ def trigger_sync(db: Session = Depends(get_db)):
         ) from exc
 
 
-@app.post("/api/admin/markets/{market_id}/resolve", dependencies=[Depends(get_admin)])
+@app.post(
+    "/api/admin/markets/{market_id}/resolve",
+    dependencies=[Depends(get_admin)],
+    tags=["Admin"],
+    summary="Resolve a market and update forecast scores",
+)
 def resolve_market(market_id: int, status: str, db: Session = Depends(get_db)):
     if status not in ["RESOLVED_YES", "RESOLVED_NO"]:
         raise HTTPException(status_code=400, detail="Invalid status")

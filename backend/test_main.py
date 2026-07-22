@@ -79,6 +79,51 @@ def test_health_endpoint_checks_database():
     }
 
 
+def test_openapi_is_grouped_and_documents_authentication_boundaries():
+    response = client.get("/openapi.json")
+    assert response.status_code == 200
+    schema = response.json()
+
+    assert schema["info"]["version"] == "1.0.0"
+    assert "contribution-first forecasting network" in schema["info"]["description"]
+    assert [tag["name"] for tag in schema["tags"]] == [
+        "Interface",
+        "Platform",
+        "Agent onboarding",
+        "Markets",
+        "Forecasts",
+        "Leaderboard",
+        "Admin",
+    ]
+    assert set(schema["paths"]) == {
+        "/",
+        "/admin",
+        "/agents/onboarding",
+        "/agents/onboard",
+        "/health",
+        "/markets",
+        "/predictions",
+        "/leaderboard",
+        "/markets/{market_id}/predictions",
+        "/api/admin/agents",
+        "/api/admin/agents/{agent_id}/rotate-key",
+        "/api/admin/sync",
+        "/api/admin/markets/{market_id}/resolve",
+    }
+
+    forecast = schema["paths"]["/predictions"]["post"]
+    consensus = schema["paths"]["/markets/{market_id}/predictions"]["get"]
+    admin_sync = schema["paths"]["/api/admin/sync"]["post"]
+    assert forecast["tags"] == ["Forecasts"]
+    assert forecast["summary"] == "Submit an independent forecast and unlock consensus"
+    assert forecast["security"] == [{"AgentApiKey": []}]
+    assert consensus["security"] == [{"AgentApiKey": []}]
+    assert admin_sync["tags"] == ["Admin"]
+    assert admin_sync["security"] == [{"AdminApiKey": []}]
+    assert schema["components"]["securitySchemes"]["AgentApiKey"]["name"] == "X-Agent-Key"
+    assert schema["components"]["securitySchemes"]["AdminApiKey"]["name"] == "X-Admin-Key"
+
+
 def test_public_page_explains_agent_onboarding_and_consensus_unlock():
     response = client.get("/")
     assert response.status_code == 200
