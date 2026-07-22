@@ -58,16 +58,17 @@
             Manage agents, optionally force-refresh markets, and resolve outcomes.
           </p>
         </div>
-        <div class="flex items-center space-x-4">
+        <div class="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
           <div>
             <div class="flex items-center">
               <input
                 :type="showAdminKey ? 'text' : 'password'"
                 x-model="adminKey"
+                x-ref="adminKeyInput"
                 autocomplete="off"
                 aria-label="Admin API key"
                 placeholder="Enter ADMIN_KEY"
-                class="bg-slate-900 border border-slate-800 rounded-l px-3 py-1 text-white text-sm focus:border-blue-500"
+                class="min-w-0 w-full sm:w-64 bg-slate-900 border border-slate-800 rounded-l px-3 py-1 text-white text-sm focus:border-blue-500"
               />
               <button
                 type="button"
@@ -80,6 +81,21 @@
             </div>
             <p class="mt-1 text-[11px] text-slate-500">
               Used only in this tab and never saved.
+            </p>
+            <p
+              class="mt-2 inline-flex items-center gap-2 text-xs"
+              :class="hasAdminKey ? 'text-emerald-300' : 'text-amber-300'"
+              role="status"
+              aria-live="polite"
+            >
+              <span
+                class="h-1.5 w-1.5 rounded-full"
+                :class="hasAdminKey ? 'bg-emerald-400' : 'bg-amber-400'"
+                aria-hidden="true"
+              ></span>
+              <span
+                x-text="hasAdminKey ? 'Admin key entered' : 'Protected controls locked'"
+              ></span>
             </p>
           </div>
           <a
@@ -132,8 +148,8 @@
           </p>
           <button
             @click="syncMarkets"
-            class="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded font-medium"
-            :disabled="syncing"
+            class="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded font-medium disabled:cursor-not-allowed disabled:opacity-40"
+            :disabled="syncing || !hasAdminKey"
           >
             <span x-text="syncing ? 'Syncing...' : 'Sync Polymarket'"></span>
           </button>
@@ -146,13 +162,15 @@
                 <div class="flex space-x-2">
                   <button
                     @click="resolveMarket(market.id, 'RESOLVED_YES')"
-                    class="bg-green-900 text-green-300 px-2 py-1 rounded"
+                    :disabled="!hasAdminKey"
+                    class="bg-green-900 text-green-300 px-2 py-1 rounded disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     YES
                   </button>
                   <button
                     @click="resolveMarket(market.id, 'RESOLVED_NO')"
-                    class="bg-red-900 text-red-300 px-2 py-1 rounded"
+                    :disabled="!hasAdminKey"
+                    class="bg-red-900 text-red-300 px-2 py-1 rounded disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     NO
                   </button>
@@ -199,7 +217,8 @@
             />
             <button
               type="submit"
-              class="w-full bg-purple-600 hover:bg-purple-500 py-2 rounded"
+              :disabled="!hasAdminKey"
+              class="w-full bg-purple-600 hover:bg-purple-500 py-2 rounded disabled:cursor-not-allowed disabled:opacity-40"
             >
               Deploy Agent
             </button>
@@ -223,7 +242,8 @@
                   ></span>
                   <button
                     @click="rotateKey(agent.id, agent.name)"
-                    class="text-xs bg-slate-800 hover:bg-slate-700 px-2 py-1 rounded"
+                    :disabled="!hasAdminKey"
+                    class="text-xs bg-slate-800 hover:bg-slate-700 px-2 py-1 rounded disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Rotate key
                   </button>
@@ -260,6 +280,15 @@
           init() {
             this.fetchMarkets();
             this.fetchAgents();
+          },
+          get hasAdminKey() {
+            return this.adminKey.trim().length > 0;
+          },
+          requireAdminKey() {
+            if (this.hasAdminKey) return true;
+            this.error = "Enter the admin key to use protected controls.";
+            this.$nextTick(() => this.$refs.adminKeyInput.focus());
+            return false;
           },
           getHeaders() {
             return {
@@ -311,6 +340,7 @@
             }
           },
           async syncMarkets() {
+            if (!this.requireAdminKey()) return;
             this.syncing = true;
             try {
               const res = await fetch("/api/admin/sync", {
@@ -328,6 +358,7 @@
             }
           },
           async resolveMarket(id, status) {
+            if (!this.requireAdminKey()) return;
             const res = await fetch(
               `/api/admin/markets/${id}/resolve?status=${status}`,
               { method: "POST", headers: this.getHeaders() },
@@ -337,6 +368,7 @@
             await this.fetchAgents();
           },
           async createAgent() {
+            if (!this.requireAdminKey()) return;
             const res = await fetch("/api/admin/agents", {
               method: "POST",
               headers: this.getHeaders(),
@@ -350,6 +382,7 @@
             }
           },
           async rotateKey(id, name) {
+            if (!this.requireAdminKey()) return;
             if (
               !confirm(
                 `Rotate the API key for ${name}? The old key will stop working immediately.`,

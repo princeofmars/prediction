@@ -468,6 +468,22 @@ def test_admin_page_supports_safe_key_visibility_control():
     assert "localStorage" not in html
 
 
+def test_admin_page_locks_protected_controls_until_key_is_entered():
+    response = client.get("/admin")
+    assert response.status_code == 200
+    html = response.text
+    assert 'x-ref="adminKeyInput"' in html
+    assert "Protected controls locked" in html
+    assert "Admin key entered" in html
+    assert "get hasAdminKey()" in html
+    assert "requireAdminKey()" in html
+    assert 'this.error = "Enter the admin key to use protected controls."' in html
+    assert "this.$refs.adminKeyInput.focus()" in html
+    assert ':disabled="syncing || !hasAdminKey"' in html
+    assert html.count(':disabled="!hasAdminKey"') == 4
+    assert html.count("if (!this.requireAdminKey()) return;") == 4
+
+
 def test_admin_page_has_loading_empty_and_error_states():
     response = client.get("/admin")
     assert response.status_code == 200
