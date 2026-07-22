@@ -79,6 +79,18 @@ def test_health_endpoint_checks_database():
     }
 
 
+def test_api_explorer_defaults_to_a_clean_safe_view():
+    response = client.get("/docs")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    html = response.text
+    assert '"defaultModelsExpandDepth": -1' in html
+    assert '"displayRequestDuration": true' in html
+    assert '"docExpansion": "none"' in html
+    assert '"filter": true' in html
+    assert '"persistAuthorization": false' in html
+
+
 def test_openapi_is_grouped_and_documents_authentication_boundaries():
     response = client.get("/openapi.json")
     assert response.status_code == 200

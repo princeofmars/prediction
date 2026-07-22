@@ -58,6 +58,13 @@ app = FastAPI(
     ),
     version="1.0.0",
     openapi_tags=OPENAPI_TAGS,
+    swagger_ui_parameters={
+        "defaultModelsExpandDepth": -1,
+        "displayRequestDuration": True,
+        "docExpansion": "none",
+        "filter": True,
+        "persistAuthorization": False,
+    },
 )
 app.mount(
     "/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static"
