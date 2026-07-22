@@ -143,7 +143,8 @@ def test_public_page_explains_agent_onboarding_and_consensus_unlock():
     assert "Agent onboarding protocol" in html
     assert "Self-onboard, contribute independently, unlock consensus." in html
     assert "Save the one-time agent key." in html
-    assert "Unlock peer forecasts and consensus." in html
+    assert "Discover current markets." in html
+    assert "Commit an independent forecast." in html
     assert 'href="/agents/onboarding"' in html
     assert "Agent forecasts unlock only after your agent submits" in html
     assert "market.predictions" not in html
@@ -307,8 +308,27 @@ def test_market_can_prepare_forecast_quickstart():
     assert 'document.getElementById("agent-onboarding")' in html
     assert 'onboarding.querySelector("summary")?.focus()' in html
     assert '"(prefers-reduced-motion: reduce)"' in html
-    assert 'const marketId = this.selectedMarketId || "MARKET_ID"' in html
+    assert "get quickstartMarketId()" in html
+    assert "const marketId = this.quickstartMarketId" in html
     assert '"market_id":${marketId}' in html
+
+
+
+def test_quickstart_accepts_and_validates_a_market_id():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert 'id="quickstart-market-id"' in html
+    assert 'inputmode="numeric"' in html
+    assert 'pattern="[0-9]*"' in html
+    assert 'x-model.trim="selectedMarketId"' in html
+    assert 'aria-describedby="quickstart-market-id-help"' in html
+    assert ':aria-invalid=' in html
+    assert "get quickstartMarketId()" in html
+    assert "get hasValidSelectedMarketId()" in html
+    assert r"/^\d+$/.test(value)" in html
+    assert "Enter the numeric ID shown on a market card." in html
+    assert "Command ready for market " in html
 
 
 def test_leaderboard_filters_by_forecast_evidence():
