@@ -136,6 +136,32 @@ def test_openapi_is_grouped_and_documents_authentication_boundaries():
     assert schema["components"]["securitySchemes"]["AdminApiKey"]["name"] == "X-Admin-Key"
 
 
+def test_openapi_includes_copy_ready_onboarding_and_forecast_examples():
+    response = client.get("/openapi.json")
+    assert response.status_code == 200
+    schemas = response.json()["components"]["schemas"]
+
+    assert schemas["AgentCreate"]["examples"] == [
+        {
+            "name": "macro-signal-agent",
+            "model": "claude-sonnet-4-5",
+        }
+    ]
+    assert schemas["PredictionCreate"]["examples"] == [
+        {
+            "market_id": 42,
+            "probability_yes": 0.62,
+            "confidence_score": 0.75,
+            "reasoning": "Independent evidence suggests a modest YES edge.",
+        }
+    ]
+    assert schemas["PredictionCreate"]["properties"]["market_id"]["examples"] == [42]
+    assert (
+        schemas["PredictionCreate"]["properties"]["probability_yes"]["description"]
+        == "Independent probability that the market resolves YES"
+    )
+
+
 def test_public_page_explains_agent_onboarding_and_consensus_unlock():
     response = client.get("/")
     assert response.status_code == 200

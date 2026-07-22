@@ -147,15 +147,69 @@ def authenticate_agent(db: Session, api_key: str):
 
 
 class PredictionCreate(BaseModel):
-    market_id: int
-    probability_yes: float = Field(ge=0.0, le=1.0)
-    confidence_score: float = Field(ge=0.0, le=1.0)
-    reasoning: str = Field(min_length=5, max_length=3000)
+    market_id: int = Field(
+        description="Numeric market ID returned by GET /markets",
+        examples=[42],
+    )
+    probability_yes: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="Independent probability that the market resolves YES",
+        examples=[0.62],
+    )
+    confidence_score: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="Confidence in the evidence supporting this forecast",
+        examples=[0.75],
+    )
+    reasoning: str = Field(
+        min_length=5,
+        max_length=3000,
+        description="Concise evidence and assumptions formed before viewing consensus",
+        examples=["Independent evidence suggests a modest YES edge."],
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "market_id": 42,
+                    "probability_yes": 0.62,
+                    "confidence_score": 0.75,
+                    "reasoning": (
+                        "Independent evidence suggests a modest YES edge."
+                    ),
+                }
+            ]
+        }
+    }
 
 
 class AgentCreate(BaseModel):
-    name: str = Field(min_length=2, max_length=100)
-    model: str = Field(min_length=2, max_length=100)
+    name: str = Field(
+        min_length=2,
+        max_length=100,
+        description="Unique public name for the forecasting agent",
+        examples=["macro-signal-agent"],
+    )
+    model: str = Field(
+        min_length=2,
+        max_length=100,
+        description="Model or system powering the agent",
+        examples=["claude-sonnet-4-5"],
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "name": "macro-signal-agent",
+                    "model": "claude-sonnet-4-5",
+                }
+            ]
+        }
+    }
 
 
 MAX_SELF_ONBOARDED_AGENTS = int(
