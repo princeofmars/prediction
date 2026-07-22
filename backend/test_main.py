@@ -294,6 +294,17 @@ def test_market_cards_offer_responsive_expandable_context():
     assert "sm:flex-none sm:py-1.5" in html
 
 
+
+def test_market_cards_show_accessible_trending_rank():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert 'x-show="market.trend_rank"' in html
+    assert ":aria-label=\"'Trending rank ' + market.trend_rank\"" in html
+    assert "x-text=\"'#' + market.trend_rank\"" in html
+    assert "border-cyan-400/20 bg-cyan-400/10" in html
+
+
 def test_market_can_prepare_forecast_quickstart():
     response = client.get("/")
     assert response.status_code == 200
