@@ -417,7 +417,17 @@ def maybe_sync_markets(db: Session):
 )
 def get_markets(response: Response, db: Session = Depends(get_db)):
     response.headers["X-Market-Sync"] = maybe_sync_markets(db)
-    return db.query(Market).filter(Market.resolution_status == "OPEN").all()
+    return (
+        db.query(Market)
+        .filter(Market.resolution_status == "OPEN")
+        .order_by(
+            Market.trend_rank.is_(None),
+            Market.trend_rank.asc(),
+            Market.id.asc(),
+        )
+        .limit(25)
+        .all()
+    )
 
 
 @app.post(

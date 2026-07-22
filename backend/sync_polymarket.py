@@ -107,7 +107,8 @@ def sync_markets_logic(db: Session = None):
         added = 0
         updated = 0
         trending_ids = set()
-        for values in _market_records(events):
+        for trend_rank, values in enumerate(_market_records(events), start=1):
+            values["trend_rank"] = trend_rank
             trending_ids.add(values["source_market_id"])
             market = (
                 db.query(Market)

@@ -941,6 +941,75 @@ def test_market_context_parsing_and_runner_prompt():
     )
 
 
+
+def test_public_markets_preserve_polymarket_trending_order():
+    with SessionLocal() as db:
+        db.add_all(
+            [
+                Market(
+                    source_market_id="rank-two",
+                    source="Polymarket",
+                    question="Second by volume",
+                    trend_rank=2,
+                    resolution_status="OPEN",
+                ),
+                Market(
+                    source_market_id="rank-one",
+                    source="Polymarket",
+                    question="First by volume",
+                    trend_rank=1,
+                    resolution_status="OPEN",
+                ),
+            ]
+        )
+        db.commit()
+
+    response = client.get("/markets")
+    assert response.status_code == 200
+    assert [market["source_market_id"] for market in response.json()] == [
+        "rank-one",
+        "rank-two",
+    ]
+
+
+@patch("sync_polymarket.requests.get")
+def test_market_sync_persists_polymarket_volume_rank(mock_get):
+    response = Mock()
+    response.json.return_value = [
+        {
+            "id": "volume-first",
+            "question": "Highest volume market",
+            "outcomes": '["Yes", "No"]',
+            "outcomePrices": '["0.70", "0.30"]',
+        },
+        {
+            "id": "volume-second",
+            "question": "Second-highest volume market",
+            "outcomes": '["Yes", "No"]',
+            "outcomePrices": '["0.40", "0.60"]',
+        },
+    ]
+    mock_get.return_value = response
+
+    assert sync_markets_logic() == {"added": 2, "updated": 0, "hidden": 0}
+    with SessionLocal() as db:
+        markets = db.query(Market).order_by(Market.trend_rank).all()
+        assert [
+            (market.source_market_id, market.trend_rank) for market in markets
+        ] == [("volume-first", 1), ("volume-second", 2)]
+
+
+def test_public_market_cards_can_copy_agent_ready_market_ids():
+    html = client.get("/").text
+    assert 'copiedMarketId: ""' in html
+    assert '@click="copyMarketId(market.id)"' in html
+    assert ":aria-label=\"'Copy market ID ' + market.id\"" in html
+    assert "'ID copied' : 'Copy market ID'" in html
+    assert "async copyMarketId(marketId)" in html
+    assert "navigator.clipboard.writeText(value)" in html
+    assert 'this.copiedResource = "Copy failed"' in html
+
+
 def alembic_config(database_url):
     config = Config(str(Path(__file__).with_name("alembic.ini")))
     config.set_main_option("sqlalchemy.url", database_url)
@@ -959,8 +1028,12 @@ def test_alembic_clean_install(tmp_path):
             "SELECT name FROM sqlite_master WHERE type = 'table'"
         ).fetchall()
     }
+    market_columns = {
+        row[1] for row in connection.execute("PRAGMA table_info(markets)").fetchall()
+    }
     connection.close()
     assert {"agents", "markets", "predictions", "alembic_version"} <= set(tables)
+    assert "trend_rank" in market_columns
 
 
 def test_alembic_adopts_legacy_database_and_preserves_key(tmp_path):

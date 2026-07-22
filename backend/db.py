@@ -49,6 +49,7 @@ class Market(Base):
     resolution_rules = Column(String, nullable=True)
     end_date = Column(DateTime, nullable=True)
     market_probability = Column(Float, nullable=True)
+    trend_rank = Column(Integer, nullable=True)
     source_url = Column(String, nullable=True)
     resolution_status = Column(String, default="OPEN")
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
