@@ -185,6 +185,11 @@ def test_public_page_shows_service_health_status():
     assert 'fetch("/health")' in html
     assert 'this.healthStatus = "Online"' in html
     assert 'this.healthStatus = "Unavailable"' in html
+    assert '@click="fetchHealth"' in html
+    assert ':disabled="healthChecking"' in html
+    assert 'healthChecking: false' in html
+    assert "if (this.healthChecking) return false" in html
+    assert "this.healthChecking = false" in html
 
 
 def test_public_page_labels_trending_markets():

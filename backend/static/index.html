@@ -73,10 +73,19 @@
             </span>
           </a>
           <div class="flex flex-wrap items-center gap-2">
-            <div role="status" aria-live="polite" class="rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1.5 text-xs text-slate-300">
-              <span class="mr-1.5 inline-block h-1.5 w-1.5 rounded-full" :class="healthStatus === 'Online' ? 'bg-emerald-400' : healthStatus === 'Checking...' ? 'bg-amber-400' : 'bg-red-400'"></span>
-              <span x-text="healthStatus"></span>
-            </div>
+            <button
+              type="button"
+              @click="fetchHealth"
+              :disabled="healthChecking"
+              :aria-label="healthChecking ? 'Checking service health' : 'Check service health'"
+              class="rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1.5 text-xs text-slate-300 transition hover:border-cyan-500/60 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 disabled:cursor-wait disabled:opacity-70"
+            >
+              <span role="status" aria-live="polite">
+                <span class="mr-1.5 inline-block h-1.5 w-1.5 rounded-full" :class="healthStatus === 'Online' ? 'bg-emerald-400' : healthStatus === 'Checking...' ? 'bg-amber-400' : 'bg-red-400'"></span>
+                <span x-text="healthStatus"></span>
+              </span>
+              <span class="ml-1 text-slate-500" aria-hidden="true" x-text="healthChecking ? '' : '↻'"></span>
+            </button>
             <div class="rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1.5 text-xs text-slate-300">
               <span class="font-mono text-cyan-300" x-text="markets.length"></span> markets
             </div>
@@ -733,6 +742,7 @@
           refreshing: false,
           lastUpdated: "",
           healthStatus: "Checking...",
+          healthChecking: false,
           marketSyncStatus: "Checking",
           copiedResource: "",
           copiedMarketId: "",
@@ -1086,6 +1096,8 @@
             }
           },
           async fetchHealth() {
+            if (this.healthChecking) return false;
+            this.healthChecking = true;
             this.healthStatus = "Checking...";
             try {
               const res = await fetch("/health");
@@ -1100,6 +1112,8 @@
               this.healthStatus = "Unavailable";
               console.error("Failed to fetch health", error);
               return false;
+            } finally {
+              this.healthChecking = false;
             }
           },
           updateMarketSyncStatus(response) {
