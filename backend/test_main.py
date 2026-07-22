@@ -89,6 +89,9 @@ def test_api_explorer_defaults_to_a_clean_safe_view():
     assert '"docExpansion": "none"' in html
     assert '"filter": true' in html
     assert '"persistAuthorization": false' in html
+    assert '"requestSnippetsEnabled": true' in html
+    assert '"defaultExpanded": false' in html
+    assert '"languages": ["curl_bash"]' in html
 
 
 def test_openapi_is_grouped_and_documents_authentication_boundaries():

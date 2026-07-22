@@ -64,6 +64,11 @@ app = FastAPI(
         "docExpansion": "none",
         "filter": True,
         "persistAuthorization": False,
+        "requestSnippetsEnabled": True,
+        "requestSnippets": {
+            "defaultExpanded": False,
+            "languages": ["curl_bash"],
+        },
     },
 )
 app.mount(
