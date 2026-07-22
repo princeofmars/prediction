@@ -548,6 +548,12 @@ def test_admin_page_supports_safe_key_visibility_control():
     assert '@click="showAdminKey = !showAdminKey"' in html
     assert ":aria-pressed=\"showAdminKey\"" in html
     assert "'Hide admin key' : 'Show admin key'" in html
+    assert '@click="clearAdminKey"' in html
+    assert 'aria-label="Clear admin key and lock protected controls"' in html
+    assert "clearAdminKey()" in html
+    assert 'this.adminKey = ""' in html
+    assert "this.showAdminKey = false" in html
+    assert 'this.successMessage = "Admin key cleared from this tab."' in html
     assert "Used only in this tab and never saved." in html
     assert "localStorage" not in html
 

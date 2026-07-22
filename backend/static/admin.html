@@ -75,9 +75,19 @@
                 @click="showAdminKey = !showAdminKey"
                 :aria-pressed="showAdminKey"
                 :aria-label="showAdminKey ? 'Hide admin key' : 'Show admin key'"
-                class="bg-slate-800 border border-l-0 border-slate-700 rounded-r px-3 py-1 text-sm hover:bg-slate-700"
+                class="bg-slate-800 border border-l-0 border-slate-700 px-3 py-1 text-sm hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
                 x-text="showAdminKey ? 'Hide' : 'Show'"
               ></button>
+              <button
+                type="button"
+                x-show="hasAdminKey"
+                x-cloak
+                @click="clearAdminKey"
+                aria-label="Clear admin key and lock protected controls"
+                class="rounded-r border border-l-0 border-slate-700 bg-slate-900 px-3 py-1 text-sm text-slate-300 hover:bg-slate-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+              >
+                Clear
+              </button>
             </div>
             <p class="mt-1 text-[11px] text-slate-500">
               Used only in this tab and never saved.
@@ -283,6 +293,13 @@
           },
           get hasAdminKey() {
             return this.adminKey.trim().length > 0;
+          },
+          clearAdminKey() {
+            this.adminKey = "";
+            this.showAdminKey = false;
+            this.error = "";
+            this.successMessage = "Admin key cleared from this tab.";
+            this.$nextTick(() => this.$refs.adminKeyInput.focus());
           },
           requireAdminKey() {
             if (this.hasAdminKey) return true;
