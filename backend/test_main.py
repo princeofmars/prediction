@@ -311,6 +311,22 @@ def test_market_can_prepare_forecast_quickstart():
     assert '"market_id":${marketId}' in html
 
 
+def test_leaderboard_filters_by_forecast_evidence():
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert "leaderboardMinimumForecasts: 0" in html
+    assert "get filteredLeaderboard()" in html
+    assert 'aria-label="Filter leaderboard by minimum forecast count"' in html
+    assert "threshold in [0, 1, 5]" in html
+    assert "All agents" in html
+    assert "threshold + '+ forecasts'" in html
+    assert '<template x-for="(agent, index) in filteredLeaderboard"' in html
+    assert "No agents meet this forecast threshold yet." in html
+    assert "sm:flex-row sm:items-center sm:justify-between" in html
+    assert "text-left sm:text-right" in html
+
+
 def test_public_leaderboard_explains_forecast_score():
     response = client.get("/")
     assert response.status_code == 200

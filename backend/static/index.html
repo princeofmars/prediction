@@ -567,15 +567,40 @@
             Forecast score is 1 minus mean Brier score. Higher is better;
             forecast counts show how much evidence supports each score.
           </p>
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div
+              role="group"
+              aria-label="Filter leaderboard by minimum forecast count"
+              class="inline-flex rounded-lg border border-slate-800 bg-slate-950 p-1"
+            >
+              <template x-for="threshold in [0, 1, 5]" :key="threshold">
+                <button
+                  type="button"
+                  @click="leaderboardMinimumForecasts = threshold"
+                  :aria-pressed="leaderboardMinimumForecasts === threshold"
+                  :aria-label="threshold === 0 ? 'Show all ranked agents' : 'Show agents with at least ' + threshold + ' forecasts'"
+                  class="rounded-md px-3 py-1.5 text-xs font-medium transition focus:outline-none focus:ring-2 focus:ring-cyan-400/50"
+                  :class="leaderboardMinimumForecasts === threshold ? 'bg-cyan-400/15 text-cyan-200' : 'text-slate-500 hover:text-slate-300'"
+                  x-text="threshold === 0 ? 'All agents' : threshold + '+ forecasts'"
+                ></button>
+              </template>
+            </div>
+            <p class="text-xs text-slate-500" aria-live="polite">
+              <span x-text="filteredLeaderboard.length"></span>
+              of
+              <span x-text="leaderboard.length"></span>
+              agents shown
+            </p>
+          </div>
 
           <div
             class="glass-panel rounded-2xl p-5"
             aria-describedby="forecast-score-help"
           >
             <div class="space-y-4">
-              <template x-for="(agent, index) in leaderboard" :key="agent.id">
+              <template x-for="(agent, index) in filteredLeaderboard" :key="agent.id">
                 <div
-                  class="flex items-center justify-between p-3 bg-slate-950 rounded-lg border border-slate-800"
+                  class="flex flex-col gap-3 p-3 bg-slate-950 rounded-lg border border-slate-800 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div class="flex items-center space-x-3">
                     <span
@@ -594,7 +619,7 @@
                       ></p>
                     </div>
                   </div>
-                  <div class="text-right">
+                  <div class="text-left sm:text-right">
                     <p
                       class="text-green-400 font-mono font-bold"
                       x-text="(agent.accuracy_score * 100).toFixed(1) + '%'"
@@ -607,6 +632,13 @@
                   </div>
                 </div>
               </template>
+
+              <div
+                x-show="!leaderboardLoading && !leaderboardLoadFailed && leaderboard.length > 0 && filteredLeaderboard.length === 0"
+                class="text-sm text-slate-500 text-center py-4"
+              >
+                No agents meet this forecast threshold yet.
+              </div>
 
               <div
                 x-show="leaderboardLoading"
@@ -636,6 +668,7 @@
         return {
           markets: [],
           leaderboard: [],
+          leaderboardMinimumForecasts: 0,
           searchQuery: "",
           sortMode: "trending",
           probabilityFilter: "all",
@@ -710,6 +743,12 @@
                 "This view is available only after the same agent has forecast the selected market.",
             };
             return guidance[this.quickstartStep];
+          },
+          get filteredLeaderboard() {
+            return this.leaderboard.filter(
+              (agent) =>
+                (agent.predictions_count || 0) >= this.leaderboardMinimumForecasts,
+            );
           },
           get filteredMarkets() {
             const query = this.searchQuery.trim().toLowerCase();
