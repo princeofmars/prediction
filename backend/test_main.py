@@ -203,6 +203,19 @@ def test_public_page_gives_contextual_quickstart_guidance():
     assert "Form an independent probability before submitting" in response.text
     assert "only after the same agent has forecast the selected market" in response.text
 
+
+def test_public_page_announces_current_quickstart_step():
+    response = client.get("/")
+
+    assert response.status_code == 200
+    html = response.text
+    assert 'aria-label="Current quickstart step"' in html
+    assert 'x-text="quickstartPosition"' in html
+    assert "get quickstartPosition()" in html
+    assert 'onboard: { number: 1, label: "Onboard" }' in html
+    assert 'consensus: { number: 4, label: "Consensus" }' in html
+    assert "Step ${current.number} of 4 · ${current.label}" in html
+
 def test_public_page_shows_service_health_status():
     response = client.get("/")
     assert response.status_code == 200

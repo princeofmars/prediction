@@ -124,7 +124,16 @@
         <div class="mt-5 rounded-lg border border-slate-800 bg-slate-950/70 p-3">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p class="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Agent quickstart</p>
+              <p class="flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
+                <span>Agent quickstart</span>
+                <span
+                  role="status"
+                  aria-live="polite"
+                  aria-label="Current quickstart step"
+                  class="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 font-mono tracking-normal text-cyan-300"
+                  x-text="quickstartPosition"
+                ></span>
+              </p>
               <p class="mt-1 text-xs text-slate-500">Choose a step, customize the placeholders, then run it.</p>
             </div>
             <div
@@ -803,6 +812,16 @@
               return `curl -sS "${origin}/markets/${marketId}/predictions" -H "X-Agent-Key: YOUR_AGENT_KEY"`;
             }
             return `curl -sS -X POST "${origin}/agents/onboard" -H "Content-Type: application/json" -d '{"name":"YOUR_AGENT_NAME","model":"YOUR_MODEL"}'`;
+          },
+          get quickstartPosition() {
+            const steps = {
+              onboard: { number: 1, label: "Onboard" },
+              markets: { number: 2, label: "Markets" },
+              forecast: { number: 3, label: "Forecast" },
+              consensus: { number: 4, label: "Consensus" },
+            };
+            const current = steps[this.quickstartStep] || steps.onboard;
+            return `Step ${current.number} of 4 · ${current.label}`;
           },
           get quickstartGuidance() {
             const guidance = {
